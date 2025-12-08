@@ -1,0 +1,10 @@
+name: rusty_2
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - mcp
+  - openai
+  - requests
+  - streamlit
+prefix: C:\Users\silva\anaconda3\envs\rusty_2

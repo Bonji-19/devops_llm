@@ -1,0 +1,13 @@
+# Example tasks.yaml file for DevAgent evaluation
+# Copy this to tasks.yaml and fill in your actual task details
+
+- id: task_001
+  description: "Fix the bug in the authentication module where users cannot log in"
+  repo_root: "/path/to/repo"
+  git_mcp_url: "http://localhost:8000"
+
+- id: task_002
+  description: "Add a new feature to export data as CSV"
+  repo_root: "/path/to/repo"
+  git_mcp_url: "http://localhost:8000"
+
