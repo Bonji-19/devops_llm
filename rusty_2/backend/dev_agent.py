@@ -1,5 +1,6 @@
 """DevAgent - Autonomous development assistant that uses LLM and MCP tools."""
 
+from .local_tools import LOCAL_TOOL_SPECS, LocalToolExecutor
 import json
 import os
 from dataclasses import dataclass
@@ -61,19 +62,16 @@ class DevAgent:
         model_client: ModelClient,
         mcp_tool_client: MCPToolClient,
         config: DevAgentConfig,
+        repo_root: str,
     ):
-        """
-        Initialize the DevAgent.
-        
-        Args:
-            model_client: ModelClient instance for LLM calls
-            mcp_tool_client: MCPToolClient instance for tool execution
-            config: DevAgent configuration
-        """
         self.model_client = model_client
         self.mcp_tool_client = mcp_tool_client
         self.config = config
+        self.repo_root = Path(repo_root).resolve()
+        self.local_tools = LocalToolExecutor(self.repo_root)
+
         self._available_tools: Optional[list[dict]] = None
+        self._mcp_tool_names: set[str] = set()
     
     async def _get_available_tools(self) -> list[dict]:
         """
@@ -85,9 +83,18 @@ class DevAgent:
             list[dict]: List of tool specifications in OpenAI format
         """
         if self._available_tools is None:
-            self._available_tools = await self.mcp_tool_client.list_tools()
+            mcp_tools = await self.mcp_tool_client.list_tools()
+            self._mcp_tool_names = {
+                t["function"]["name"]
+                for t in mcp_tools
+                if t.get("type") == "function" and "function" in t
+            }
+
+            # Combine MCP tools and local tools
+            self._available_tools = mcp_tools + LOCAL_TOOL_SPECS
+
         return self._available_tools
-    
+        
     async def run_step(self, conversation: Conversation) -> None:
         """
         Perform one agent iteration.
@@ -95,22 +102,10 @@ class DevAgent:
         # Get available tools from MCP
         tools = await self._get_available_tools()
 
-        # Decide whether to allow tools this turn.
-        # If we already have a tool result in the conversation,
-        # don't expose tools again. This forces the model to
-        # reason in natural language instead of looping on tools.
-        allow_tools = True
-        for msg in reversed(conversation.messages):
-            if msg.get("role") == "assistant":
-                content = msg.get("content", "")
-                if isinstance(content, str) and content.startswith("Tool result:"):
-                    allow_tools = False
-                    break
-
-        # Call LLM with or without tools depending on allow_tools
+        # Always allow tools; rely on max_steps and the agent prompt to avoid loops
         response = await self.model_client.generate(
             messages=conversation.messages,
-            tools=tools if (tools and allow_tools) else None,
+            tools=tools if tools else None,
         )
 
         
@@ -159,47 +154,68 @@ class DevAgent:
         if tool_calls:
             for tool_call in tool_calls:
                 try:
-                    # Execute the tool via MCP client
-                    tool_results = await self.mcp_tool_client.call_tool_from_openai_tool_call(
-                        tool_call
-                    )
-                    
+                    func = tool_call.get("function", {})
+                    tool_name = func.get("name")
+
+                    # Parse arguments
+                    raw_args = func.get("arguments", "{}")
+                    if isinstance(raw_args, str):
+                        import json as _json
+                        try:
+                            arguments = _json.loads(raw_args)
+                        except Exception:
+                            arguments = {}
+                    elif isinstance(raw_args, dict):
+                        arguments = raw_args
+                    else:
+                        arguments = {}
+
+                    # Decide MCP vs local
+                    if tool_name in self._mcp_tool_names:
+                        # MCP tool
+                        tool_results = await self.mcp_tool_client.call_tool(
+                            name=tool_name,
+                            arguments=arguments,
+                        )
+                    else:
+                        # Local tool (read_file, apply_unified_diff, etc.)
+                        tool_results = await self.local_tools.call_tool(
+                            name=tool_name,
+                            arguments=arguments,
+                        )
+
                     # Convert tool results to a single content string
                     content_parts = []
                     for result in tool_results:
                         result_type = result.get("type", "text")
                         result_data = result.get("data", "")
-                        
                         if result_type == "text":
                             content_parts.append(str(result_data))
                         elif result_type == "json":
-                            content_parts.append(json.dumps(result_data, indent=2))
+                            import json as _json
+                            content_parts.append(_json.dumps(result_data, indent=2))
                         else:
                             content_parts.append(f"[{result_type}]: {result_data}")
-                    
+
                     tool_content = "\n\n".join(content_parts) if content_parts else ""
-                    
+
                     # Get tool call ID for the tool message
-                    tool_call_id = None
-                    if "id" in tool_call:
-                        tool_call_id = tool_call["id"]
-                    elif "function" in tool_call and "name" in tool_call["function"]:
-                        tool_call_id = tool_call["function"]["name"]
-                    
-                    # Append tool message to conversation
+                    tool_call_id = tool_call.get("id") or tool_name
+
+                    # Append tool message to conversation (as assistant "Tool result: ...")
                     tool_msg = tool_message(
                         content=tool_content,
                         tool_call_id=tool_call_id,
                     )
                     conversation.append(tool_msg)
-                    
+
                 except Exception as e:
-                    # If tool execution fails, append error message
                     error_msg = tool_message(
-                        content=f"Error executing tool: {str(e)}",
-                        tool_call_id=tool_call.get("id") if "id" in tool_call else None,
+                        content=f"Error executing tool {tool_call}: {str(e)}",
+                        tool_call_id=tool_call.get("id"),
                     )
                     conversation.append(error_msg)
+
 
 
 
@@ -222,28 +238,39 @@ def create_initial_conversation(task_description: str, repo_root: str) -> Conver
     
     system_content = f"""You are an autonomous local development assistant.
 
-You are working on a local repository located at: {repo_path}
+    You are working on a local repository located at: {repo_path}
 
-Your responsibilities:
-- Use the available tools to inspect and modify files in the repository
-- Run tests to verify changes work correctly
-- Run static checks (linters, type checkers, etc.) to ensure code quality
-- Keep changes minimal and focused on the task at hand
-- Stop when tests and checks pass and the task appears solved
+    Your responsibilities:
+    - Use the available tools to inspect and modify files in the repository
+    - Run tests to verify changes work correctly
+    - Run static checks (linters, type checkers, etc.) to ensure code quality
+    - Keep changes minimal and focused on the task at hand
+    - Stop when tests and checks pass and the task appears solved
 
-You have access to Git MCP server tools that allow you to:
-- Read and modify files
-- Run commands
-- Check git status
-- And perform other repository operations
+    You have access to Git MCP server tools that allow you to:
+    - Read git status and history
+    - Inspect diffs
+    - Manage branches and commits
 
-For each task:
-1. Use tools as needed to gather information (e.g., list files, inspect tests, run tests).
-2. Then produce a clear natural-language explanation of what you found.
-3. Only call tools again if you really need more information.
-4. When you believe you have answered the task, end your final message with the exact phrase: "Task completed".
+    You also have local tools to work directly with files:
+    - read_file(path): read a text file from the repo
+    - apply_unified_diff(path, diff, strict?): apply a unified diff patch to a file
 
-Always verify your work by running tests and checks before considering the task complete."""
+    Typical workflow for modifying a file:
+    1. Call read_file to inspect the current contents.
+    2. Decide on a small, focused change.
+    3. Construct a unified diff patch (---/+++ headers and @@ hunks) that applies that change.
+    4. Call apply_unified_diff with the file path and the patch.
+    5. (Later) run tests or checks to verify your change.
+
+    For each task:
+    1. Use tools as needed to gather information (e.g., list files, inspect tests, run tests).
+    2. Then produce a clear natural-language explanation of what you found or changed.
+    3. Only call tools again if you really need more information.
+    4. When you believe you have answered the task, end your final message with the exact phrase: "Task completed".
+
+    Always verify your work by running tests and checks before considering the task complete."""
+
 
 
     
@@ -298,6 +325,7 @@ async def run_task(
             model_client=model_client,
             mcp_tool_client=mcp_tool_client,
             config=config,
+            repo_root=repo_root,
         )
         
         # Create initial conversation

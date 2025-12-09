@@ -1,7 +1,13 @@
 """Configuration and settings management for LLM access."""
 
 import os
+from pathlib import Path
 from typing import Optional
+from dotenv import load_dotenv
+
+# Load .env from the project root (parent of `rusty_2`)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(PROJECT_ROOT / ".env")
 
 try:
     from dotenv import load_dotenv
