@@ -7,4 +7,9 @@ dependencies:
   - openai
   - requests
   - streamlit
-prefix: C:\Users\silva\anaconda3\envs\rusty_2
+  - fastapi
+  - uvicorn
+  - pip
+  - pip:
+    - mcp-server-git
+
