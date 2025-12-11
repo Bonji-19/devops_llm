@@ -253,6 +253,7 @@ def create_initial_conversation(task_description: str, repo_root: str) -> Conver
     - Manage branches and commits
 
     You also have local tools to work directly with files:
+    - list_files(path?): list files and directories in a directory (use '.' for repo root)
     - read_file(path): read a text file from the repo
     - apply_unified_diff(path, diff, strict?): apply a unified diff patch to a file
 

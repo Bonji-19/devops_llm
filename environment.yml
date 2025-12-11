@@ -3,13 +3,13 @@ channels:
   - defaults
 dependencies:
   - python=3.11
+  - pip
   - mcp
   - openai
   - requests
   - streamlit
   - fastapi
   - uvicorn
-  - pip
   - pip:
     - mcp-server-git
 
