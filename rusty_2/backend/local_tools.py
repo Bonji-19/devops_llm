@@ -14,6 +14,24 @@ LOCAL_TOOL_SPECS: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "list_files",
+            "description": "List files and directories in a directory. Use this to explore the repository structure.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the directory, relative to the repo root. Use '.' for the repo root.",
+                        "default": ".",
+                    }
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "read_file",
             "description": "Read a UTF-8 text file from the repository.",
             "parameters": {
@@ -84,12 +102,53 @@ class LocalToolExecutor:
           ...
         ]
         """
-        if name == "read_file":
+        if name == "list_files":
+            return await self._list_files(arguments)
+        elif name == "read_file":
             return await self._read_file(arguments)
         elif name == "apply_unified_diff":
             return await self._apply_unified_diff(arguments)
         else:
             raise ValueError(f"Unknown local tool: {name}")
+
+    async def _list_files(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """List files and directories in a directory."""
+        dir_path_str = args.get("path", ".")
+        dir_path = self._resolve_path(dir_path_str)
+        
+        if not dir_path.exists():
+            return [{
+                "type": "text",
+                "data": f"[list_files] Directory not found: {dir_path_str}",
+            }]
+        
+        if not dir_path.is_dir():
+            return [{
+                "type": "text",
+                "data": f"[list_files] Path is not a directory: {dir_path_str}",
+            }]
+        
+        try:
+            items = []
+            for item in sorted(dir_path.iterdir()):
+                # Skip .git directory to avoid clutter
+                if item.name == ".git":
+                    continue
+                
+                item_type = "directory" if item.is_dir() else "file"
+                items.append(f"{item_type}: {item.name}")
+            
+            if not items:
+                result_text = f"[list_files] Directory '{dir_path_str}' is empty"
+            else:
+                result_text = f"[list_files] Contents of '{dir_path_str}':\n" + "\n".join(items)
+            
+            return [{"type": "text", "data": result_text}]
+        except Exception as e:
+            return [{
+                "type": "text",
+                "data": f"[list_files] Error listing directory {dir_path_str}: {e}",
+            }]
 
     async def _read_file(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
         path = self._resolve_path(args["path"])
