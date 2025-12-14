@@ -20,13 +20,14 @@ from rusty_2.frontend.streamlit_display import StreamlitConversationDisplay
 
 # Page configuration
 st.set_page_config(
-    page_title="Rust 2.0",
-    page_icon="🤖",
+    page_title="Rusty 2.0",
+    page_icon="rusty_2/frontend/images/rusty_logo.png",
     layout="wide",
 )
 
 # Title
-st.title("🤖 Rusty 2.0 - Local Autonomous Development Assistant")
+st.image("rusty_2/frontend/images/rusty_title.png")
+st.header("Rusty 2.0 - Local Autonomous Development Assistant", text_alignment="center")
 
 # Sidebar for configuration
 with st.sidebar:
@@ -54,16 +55,16 @@ with st.sidebar:
     )
 
 # Main panel
-st.header("Task Description")
+st.subheader("Task Description")
 
 task_description = st.text_area(
-    "Describe the task you want the DevAgent to perform:",
+    "Describe the task you want Rusty to perform:",
     height=150,
     placeholder="e.g., Fix the bug in the authentication module...",
 )
 
 # Run button
-if st.button("Run Dev Agent", type="primary", use_container_width=True):
+if st.button("Run Rusty", type="primary", use_container_width=True):
     if not task_description.strip():
         st.error("Please enter a task description.")
     elif not repo_root.strip():
@@ -72,7 +73,7 @@ if st.button("Run Dev Agent", type="primary", use_container_width=True):
         st.error("Please enter a Git MCP URL.")
     else:
         # Show loading spinner
-        with st.spinner("Running DevAgent..."):
+        with st.spinner("Rusty is thinking..."):
             try:
                 # Prepare request payload
                 payload = {
@@ -173,7 +174,7 @@ with st.expander("ℹ️ How to use"):
     
     2. **Enter your task description** in the main panel
     
-    3. **Click "Run Dev Agent"** to start the agent
+    3. **Click "Run Rusty"** to start the agent
     
     4. **View the results**:
        - Check the execution summary
