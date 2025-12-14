@@ -255,14 +255,20 @@ def create_initial_conversation(task_description: str, repo_root: str) -> Conver
     You also have local tools to work directly with files:
     - list_files(path?): list files and directories in a directory (use '.' for repo root)
     - read_file(path): read a text file from the repo
+    - write_file(path, content, overwrite?): create or overwrite a text file
     - apply_unified_diff(path, diff, strict?): apply a unified diff patch to a file
+    - run_tests(): run the test suite with pytest
+    - run_linter(target?): run a linter (e.g. pylint) on the codebase
 
     Typical workflow for modifying a file:
-    1. Call read_file to inspect the current contents.
+    1. Call read_file (and/or list_files) to inspect the current contents and locate relevant files.
     2. Decide on a small, focused change.
-    3. Construct a unified diff patch (---/+++ headers and @@ hunks) that applies that change.
-    4. Call apply_unified_diff with the file path and the patch.
-    5. (Later) run tests or checks to verify your change.
+    3. Either:
+       - Construct a unified diff patch (---/+++ headers and @@ hunks) and call apply_unified_diff, or
+       - Use write_file to create/overwrite a file with the full desired content.
+    4. After modifying code, call run_tests and  run_linter to verify your changes.
+    5. Only when tests pass and there are no critical linter failures should you explain what you changed and end with the exact phrase: "Task completed".
+
 
     For each task:
     1. Use tools as needed to gather information (e.g., list files, inspect tests, run tests).
