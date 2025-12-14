@@ -84,17 +84,41 @@ if st.session_state.conversation_history:
                 unsafe_allow_html=True,
             )
         elif role == "assistant":
-            st.markdown(
-                f'<div style="padding: 10px; background-color: #e9ecef; border-left: 4px solid #28a745; '
-                f'border-radius: 10px; margin: 10px 0; margin-right: 20%;">'
-                f'<strong>Rusty</strong><br>{content}</div>',
-                unsafe_allow_html=True,
-            )
+            # Display assistant message with avatar
+            col_avatar, col_msg = st.columns([1, 20])
+            with col_avatar:
+                st.image("rusty_2/frontend/images/rusty_logo.png", width=50)
+            with col_msg:
+                st.markdown(
+                    f'<div style="padding: 10px; background-color: #e9ecef; border-left: 4px solid #28a745; '
+                    f'border-radius: 10px; margin: 10px 0; margin-right: 20%;">'
+                    f'<strong>Rusty</strong><br>{content}</div>',
+                    unsafe_allow_html=True,
+                )
         elif role == "tool":
             tool_call_id = msg.get("tool_call_id", "")
             tool_id_text = f" (ID: {tool_call_id})" if tool_call_id else ""
             st.markdown(f"**Tool Output{tool_id_text}**")
             st.code(content, language=None)
+
+# Display execution summary if available
+if "last_execution_summary" in st.session_state and st.session_state.last_execution_summary:
+    st.markdown("### Execution Summary")
+    summary = st.session_state.last_execution_summary
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        status_emoji = "✅" if summary["success"] else "❌"
+        st.metric("Status", f"{status_emoji} {'Success' if summary['success'] else 'Failed'}")
+    
+    with col2:
+        st.metric("Steps", summary["steps"])
+    
+    with col3:
+        if summary["error"]:
+            st.error(f"Error: {summary['error']}")
+        else:
+            st.success("No errors")
 
 # Chat input - use counter in key to allow clearing
 task_description = st.text_area(
@@ -115,6 +139,8 @@ with col2:
 if clear_button:
     st.session_state.conversation_history = []
     st.session_state.repo_config = {}
+    if "last_execution_summary" in st.session_state:
+        del st.session_state.last_execution_summary
     st.session_state.chat_input_counter += 1  # Clear input field
     st.rerun()
 
@@ -209,22 +235,12 @@ if send_button:
                         msg_dict["tool_call_id"] = msg["tool_call_id"]
                     st.session_state.conversation_history.append(msg_dict)
                 
-                # Display execution summary in an expander
-                with st.expander("Execution Summary", expanded=True):
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        status_emoji = "✅" if success else "❌"
-                        st.metric("Status", f"{status_emoji} {'Success' if success else 'Failed'}")
-                    
-                    with col2:
-                        st.metric("Steps", steps)
-                    
-                    with col3:
-                        if error:
-                            st.error(f"Error: {error}")
-                        else:
-                            st.success("No errors")
+                # Store execution summary in session state for persistent display
+                st.session_state.last_execution_summary = {
+                    "success": success,
+                    "steps": steps,
+                    "error": error,
+                }
                 
                 # Increment counter to clear the input field (creates new widget instance)
                 st.session_state.chat_input_counter += 1
