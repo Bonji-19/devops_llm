@@ -286,6 +286,7 @@ async def run_task(
     task_description: str,
     repo_root: str,
     config: DevAgentConfig,
+    existing_conversation: Optional[Conversation] = None,
 ) -> DevAgentResult:
     """
     Run a DevAgent task to completion.
@@ -329,8 +330,14 @@ async def run_task(
             repo_root=repo_root,
         )
         
-        # Create initial conversation
-        conversation = create_initial_conversation(task_description, repo_root)
+        # Create or continue conversation
+        if existing_conversation is not None:
+            # Continue existing conversation by appending the new user message
+            conversation = existing_conversation
+            conversation.append(user_message(task_description))
+        else:
+            # Create new conversation
+            conversation = create_initial_conversation(task_description, repo_root)
         
         # Run agent steps
         steps = 0
