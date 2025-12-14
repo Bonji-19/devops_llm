@@ -19,6 +19,14 @@ app = FastAPI(
 )
 
 
+class MessageModel(BaseModel):
+    """Model for a chat message."""
+    
+    role: str
+    content: str
+    tool_call_id: Optional[str] = None
+
+
 class DevAgentRunRequest(BaseModel):
     """Request model for running a DevAgent task."""
     
@@ -26,14 +34,7 @@ class DevAgentRunRequest(BaseModel):
     repo_root: str
     git_mcp_url: str
     max_steps: int = 20
-
-
-class MessageModel(BaseModel):
-    """Model for a chat message."""
-    
-    role: str
-    content: str
-    tool_call_id: Optional[str] = None
+    conversation_history: Optional[list[MessageModel]] = None
 
 
 class DevAgentRunResponse(BaseModel):
@@ -71,11 +72,27 @@ async def run_dev_agent(request: DevAgentRunRequest) -> DevAgentRunResponse:
             backend_name="openai",  # Default backend, can be enhanced later
         )
         
+        # Convert conversation history if provided
+        existing_conversation = None
+        if request.conversation_history:
+            from ..common.conversation import Conversation
+            message_dicts = []
+            for msg_model in request.conversation_history:
+                msg_dict = {
+                    "role": msg_model.role,
+                    "content": msg_model.content,
+                }
+                if msg_model.tool_call_id:
+                    msg_dict["tool_call_id"] = msg_model.tool_call_id
+                message_dicts.append(msg_dict)
+            existing_conversation = Conversation(messages=message_dicts)
+        
         # Run the task
         result = await run_task(
             task_description=request.task_description,
             repo_root=request.repo_root,
             config=config,
+            existing_conversation=existing_conversation,
         )
         
         # Serialize conversation messages to MessageModel list

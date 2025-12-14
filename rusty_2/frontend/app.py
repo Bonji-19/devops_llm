@@ -54,33 +54,150 @@ with st.sidebar:
         help="Maximum number of agent iterations",
     )
 
-# Main panel
-st.subheader("Task Description")
+# Initialize conversation history in session state
+if "conversation_history" not in st.session_state:
+    st.session_state.conversation_history = []
+if "repo_config" not in st.session_state:
+    st.session_state.repo_config = {}
+if "chat_input_counter" not in st.session_state:
+    st.session_state.chat_input_counter = 0
 
+# Main panel - Chat interface
+st.subheader("Chat with Rusty")
+
+# Display conversation history
+if st.session_state.conversation_history:
+    st.markdown("### Conversation History")
+    for msg in st.session_state.conversation_history:
+        role = msg.get("role", "unknown")
+        content = msg.get("content", "")
+        
+        if role == "system":
+            # System messages are typically hidden or shown in a muted style
+            with st.expander("System Message", expanded=False):
+                st.markdown(content)
+        elif role == "user":
+            st.markdown(
+                f'<div style="padding: 10px; background-color: #007bff; color: white; '
+                f'border-radius: 10px; margin: 10px 0; text-align: right; margin-left: 20%;">'
+                f'<strong>You</strong><br>{content}</div>',
+                unsafe_allow_html=True,
+            )
+        elif role == "assistant":
+            # Display assistant message with avatar
+            col_avatar, col_msg = st.columns([1, 20])
+            with col_avatar:
+                st.image("rusty_2/frontend/images/rusty_logo.png", width=50)
+            with col_msg:
+                st.markdown(
+                    f'<div style="padding: 10px; background-color: #e9ecef; border-left: 4px solid #28a745; '
+                    f'border-radius: 10px; margin: 10px 0; margin-right: 20%;">'
+                    f'<strong>Rusty</strong><br>{content}</div>',
+                    unsafe_allow_html=True,
+                )
+        elif role == "tool":
+            tool_call_id = msg.get("tool_call_id", "")
+            tool_id_text = f" (ID: {tool_call_id})" if tool_call_id else ""
+            st.markdown(f"**Tool Output{tool_id_text}**")
+            st.code(content, language=None)
+
+# Display execution summary if available
+if "last_execution_summary" in st.session_state and st.session_state.last_execution_summary:
+    st.markdown("### Execution Summary")
+    summary = st.session_state.last_execution_summary
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        status_emoji = "✅" if summary["success"] else "❌"
+        st.metric("Status", f"{status_emoji} {'Success' if summary['success'] else 'Failed'}")
+    
+    with col2:
+        st.metric("Steps", summary["steps"])
+    
+    with col3:
+        if summary["error"]:
+            st.error(f"Error: {summary['error']}")
+        else:
+            st.success("No errors")
+
+# Chat input - use counter in key to allow clearing
 task_description = st.text_area(
-    "Describe the task you want Rusty to perform:",
-    height=150,
+    "Type your message:",
     placeholder="e.g., Fix the bug in the authentication module...",
+    key=f"chat_input_{st.session_state.chat_input_counter}",
+    height=150
 )
 
-# Run button
-if st.button("Run Rusty", type="primary", use_container_width=True):
+# Buttons
+col1, col2 = st.columns([1, 1])
+with col1:
+    send_button = st.button("Send Message", type="primary", use_container_width=True)
+with col2:
+    clear_button = st.button("Clear Conversation", use_container_width=True)
+
+# Handle clear conversation
+if clear_button:
+    st.session_state.conversation_history = []
+    st.session_state.repo_config = {}
+    if "last_execution_summary" in st.session_state:
+        del st.session_state.last_execution_summary
+    st.session_state.chat_input_counter += 1  # Clear input field
+    st.rerun()
+
+# Handle send message
+if send_button:
     if not task_description.strip():
-        st.error("Please enter a task description.")
+        st.error("Please enter a message.")
     elif not repo_root.strip():
         st.error("Please enter a repository root path.")
     elif not git_mcp_url.strip():
         st.error("Please enter a Git MCP URL.")
     else:
+        # Store repo config in session state (for consistency across messages)
+        if not st.session_state.repo_config:
+            st.session_state.repo_config = {
+                "repo_root": repo_root,
+                "git_mcp_url": git_mcp_url,
+                "max_steps": max_steps,
+            }
+        else:
+            # Update config if changed
+            st.session_state.repo_config.update({
+                "repo_root": repo_root,
+                "git_mcp_url": git_mcp_url,
+                "max_steps": max_steps,
+            })
+        
+        # Prepare conversation history for API (exclude the new user message we're about to send)
+        # Format messages to match MessageModel structure
+        conversation_history_for_api = None
+        if st.session_state.conversation_history:
+            conversation_history_for_api = []
+            for msg in st.session_state.conversation_history:
+                msg_dict = {
+                    "role": msg.get("role", "unknown"),
+                    "content": msg.get("content", ""),
+                }
+                if msg.get("tool_call_id"):
+                    msg_dict["tool_call_id"] = msg["tool_call_id"]
+                conversation_history_for_api.append(msg_dict)
+        
+        # Add user message to conversation history (for display)
+        st.session_state.conversation_history.append({
+            "role": "user",
+            "content": task_description,
+        })
+        
         # Show loading spinner
         with st.spinner("Rusty is thinking..."):
             try:
                 # Prepare request payload
                 payload = {
                     "task_description": task_description,
-                    "repo_root": repo_root,
-                    "git_mcp_url": git_mcp_url,
-                    "max_steps": max_steps,
+                    "repo_root": st.session_state.repo_config["repo_root"],
+                    "git_mcp_url": st.session_state.repo_config["git_mcp_url"],
+                    "max_steps": st.session_state.repo_config["max_steps"],
+                    "conversation_history": conversation_history_for_api,
                 }
                 
                 # Determine API URL (try to get from session state or use default)
@@ -106,25 +223,9 @@ if st.button("Run Rusty", type="primary", use_container_width=True):
                 error = result.get("error")
                 messages = result.get("messages", [])
                 
-                # Display summary
-                st.header("Execution Summary")
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    status_emoji = "✅" if success else "❌"
-                    st.metric("Status", f"{status_emoji} {'Success' if success else 'Failed'}")
-                
-                with col2:
-                    st.metric("Steps", steps)
-                
-                with col3:
-                    if error:
-                        st.error(f"Error: {error}")
-                    else:
-                        st.success("No errors")
-                
-                # Convert messages to conversation format
-                message_dicts = []
+                # Update conversation history with all messages from the response
+                # (this includes the new user message and all assistant/tool responses)
+                st.session_state.conversation_history = []
                 for msg in messages:
                     msg_dict = {
                         "role": msg.get("role", "unknown"),
@@ -132,15 +233,20 @@ if st.button("Run Rusty", type="primary", use_container_width=True):
                     }
                     if msg.get("tool_call_id"):
                         msg_dict["tool_call_id"] = msg["tool_call_id"]
-                    message_dicts.append(msg_dict)
+                    st.session_state.conversation_history.append(msg_dict)
                 
-                # Create conversation object
-                conversation = Conversation(messages=message_dicts)
+                # Store execution summary in session state for persistent display
+                st.session_state.last_execution_summary = {
+                    "success": success,
+                    "steps": steps,
+                    "error": error,
+                }
                 
-                # Display conversation
-                st.header("Conversation")
-                display = StreamlitConversationDisplay(conversation)
-                display.render()
+                # Increment counter to clear the input field (creates new widget instance)
+                st.session_state.chat_input_counter += 1
+                
+                # Rerun to show updated conversation
+                st.rerun()
                 
             except requests.exceptions.RequestException as e:
                 st.error(f"Error connecting to API: {str(e)}")
@@ -172,13 +278,13 @@ with st.expander("ℹ️ How to use"):
        - Enter the Git MCP server URL
        - Set the maximum number of steps
     
-    2. **Enter your task description** in the main panel
+    2. **Type your message** in the chat input field
     
-    3. **Click "Run Rusty"** to start the agent
+    3. **Click "Send Message"** to send it to Rusty
     
-    4. **View the results**:
-       - Check the execution summary
-       - Review the full conversation
+    4. **Continue the conversation** by sending additional messages
+    
+    5. **Clear the conversation** using the "Clear Conversation" button to start fresh
     
     **Note**: Make sure the FastAPI backend is running before starting a task.
     """)
