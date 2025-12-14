@@ -8,6 +8,9 @@ from typing import Any, Dict, List
 from rusty_2.common.unified_diff import UnifiedDiff, apply as apply_unified_diff
 
 import asyncio
+import sys
+import traceback
+import subprocess
 
 
 # Tool specs in OpenAI "tools" format
@@ -270,22 +273,32 @@ class LocalToolExecutor:
                 "data": f"[write_file] Error writing file {rel_path}: {e}",
             }]
     async def _run_tests(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Run pytest in the repository root."""
-        cmd = ["python", "-m", "pytest"]
+        """Run pytest in the repository root.
+
+        Uses subprocess.run wrapped in asyncio.to_thread so it also works
+        in environments where asyncio.create_subprocess_exec is not implemented.
+        """
+        python_exe = sys.executable
+        cmd = [python_exe, "-m", "pytest"]
+
+        def _run() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                cmd,
+                cwd=str(self.repo_root),
+                capture_output=True,
+                text=True,
+            )
 
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                cwd=str(self.repo_root),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await proc.communicate()
-            out = stdout.decode("utf-8", errors="replace")
-            err = stderr.decode("utf-8", errors="replace")
+            result = await asyncio.to_thread(_run)
+            out = result.stdout or ""
+            err = result.stderr or ""
 
-            combined = f"$ {' '.join(cmd)}\n\nExit code: {proc.returncode}\n\nSTDOUT:\n{out}\n\nSTDERR:\n{err}"
-            # Avoid flooding the model with insane output
+            combined = (
+                f"$ {' '.join(cmd)}\n\n"
+                f"Exit code: {result.returncode}\n\n"
+                f"STDOUT:\n{out}\n\nSTDERR:\n{err}"
+            )
             if len(combined) > 8000:
                 combined = combined[:8000] + "\n\n...[truncated output]"
 
@@ -299,32 +312,41 @@ class LocalToolExecutor:
                 "data": "[run_tests] pytest not found. Make sure it is installed in this environment.",
             }]
         except Exception as e:
+            tb = traceback.format_exc()
             return [{
                 "type": "text",
-                "data": f"[run_tests] Error running tests: {e}",
+                "data": f"[run_tests] Error running tests: {e!r}\n\nTraceback:\n{tb}",
             }]
+
+
 
     async def _run_linter(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Run a linter (e.g. pylint) on the repository or a given target."""
         target = args.get("target", "").strip()
         if not target:
-            # Default: lint your package
             target = "rusty_2"
 
-        cmd = ["pylint", target]
+        python_exe = sys.executable
+        cmd = [python_exe, "-m", "pylint", target]
+
+        def _run() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                cmd,
+                cwd=str(self.repo_root),
+                capture_output=True,
+                text=True,
+            )
 
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                cwd=str(self.repo_root),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await proc.communicate()
-            out = stdout.decode("utf-8", errors="replace")
-            err = stderr.decode("utf-8", errors="replace")
+            result = await asyncio.to_thread(_run)
+            out = result.stdout or ""
+            err = result.stderr or ""
 
-            combined = f"$ {' '.join(cmd)}\n\nExit code: {proc.returncode}\n\nSTDOUT:\n{out}\n\nSTDERR:\n{err}"
+            combined = (
+                f"$ {' '.join(cmd)}\n\n"
+                f"Exit code: {result.returncode}\n\n"
+                f"STDOUT:\n{out}\n\nSTDERR:\n{err}"
+            )
             if len(combined) > 8000:
                 combined = combined[:8000] + "\n\n...[truncated output]"
 
@@ -335,11 +357,14 @@ class LocalToolExecutor:
         except FileNotFoundError:
             return [{
                 "type": "text",
-                "data": "[run_linter] pylint not found. Install it or adjust the tool to your linter of choice.",
+                "data": "[run_linter] pylint not found. Install it (or adjust the tool to your linter of choice).",
             }]
         except Exception as e:
+            tb = traceback.format_exc()
             return [{
                 "type": "text",
-                "data": f"[run_linter] Error running linter: {e}",
+                "data": f"[run_linter] Error running linter: {e!r}\n\nTraceback:\n{tb}",
             }]
+
+
 
