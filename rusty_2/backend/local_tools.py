@@ -1,5 +1,4 @@
 """Local tools for file I/O and unified diff patch application."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,6 +6,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from rusty_2.common.unified_diff import UnifiedDiff, apply as apply_unified_diff
+
+import asyncio
 
 
 # Tool specs in OpenAI "tools" format
@@ -76,6 +77,61 @@ LOCAL_TOOL_SPECS: List[Dict[str, Any]] = [
             },
         },
     },
+        {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Create or overwrite a UTF-8 text file in the repository.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "File path relative to the repo root.",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Full content of the file.",
+                    },
+                    "overwrite": {
+                        "type": "boolean",
+                        "description": "If false and the file exists, the tool will fail.",
+                        "default": True,
+                    },
+                },
+                "required": ["path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_tests",
+            "description": "Run the test suite with pytest in the repository root.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_linter",
+            "description": "Run a linter (e.g. pylint) on the repository.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "string",
+                        "description": "Optional target to lint (e.g. 'rusty_2'). Defaults to the repo root package.",
+                        "default": "",
+                    }
+                },
+                "required": [],
+            },
+        },
+    },
 ]
 
 
@@ -108,6 +164,12 @@ class LocalToolExecutor:
             return await self._read_file(arguments)
         elif name == "apply_unified_diff":
             return await self._apply_unified_diff(arguments)
+        elif name == "write_file":
+            return await self._write_file(arguments)
+        elif name == "run_tests":
+            return await self._run_tests(arguments)
+        elif name == "run_linter":
+            return await self._run_linter(arguments)
         else:
             raise ValueError(f"Unknown local tool: {name}")
 
@@ -180,3 +242,104 @@ class LocalToolExecutor:
                 "type": "text",
                 "data": f"[apply_unified_diff] Failed to apply patch to {args['path']}: {e}",
             }]
+    async def _write_file(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Create or overwrite a UTF-8 text file in the repository."""
+        rel_path = args["path"]
+        content = args["content"]
+        overwrite = bool(args.get("overwrite", True))
+
+        path = self._resolve_path(rel_path)
+
+        try:
+            if path.exists() and not overwrite:
+                return [{
+                    "type": "text",
+                    "data": f"[write_file] File already exists and overwrite=False: {rel_path}",
+                }]
+
+            # Ensure parent directory exists
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+            path.write_text(content, encoding="utf-8")
+
+            msg = f"[write_file] Wrote {len(content)} characters to {rel_path}"
+            return [{"type": "text", "data": msg}]
+        except Exception as e:
+            return [{
+                "type": "text",
+                "data": f"[write_file] Error writing file {rel_path}: {e}",
+            }]
+    async def _run_tests(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Run pytest in the repository root."""
+        cmd = ["python", "-m", "pytest"]
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=str(self.repo_root),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await proc.communicate()
+            out = stdout.decode("utf-8", errors="replace")
+            err = stderr.decode("utf-8", errors="replace")
+
+            combined = f"$ {' '.join(cmd)}\n\nExit code: {proc.returncode}\n\nSTDOUT:\n{out}\n\nSTDERR:\n{err}"
+            # Avoid flooding the model with insane output
+            if len(combined) > 8000:
+                combined = combined[:8000] + "\n\n...[truncated output]"
+
+            return [{
+                "type": "text",
+                "data": f"[run_tests] Result:\n{combined}",
+            }]
+        except FileNotFoundError:
+            return [{
+                "type": "text",
+                "data": "[run_tests] pytest not found. Make sure it is installed in this environment.",
+            }]
+        except Exception as e:
+            return [{
+                "type": "text",
+                "data": f"[run_tests] Error running tests: {e}",
+            }]
+
+    async def _run_linter(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Run a linter (e.g. pylint) on the repository or a given target."""
+        target = args.get("target", "").strip()
+        if not target:
+            # Default: lint your package
+            target = "rusty_2"
+
+        cmd = ["pylint", target]
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=str(self.repo_root),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await proc.communicate()
+            out = stdout.decode("utf-8", errors="replace")
+            err = stderr.decode("utf-8", errors="replace")
+
+            combined = f"$ {' '.join(cmd)}\n\nExit code: {proc.returncode}\n\nSTDOUT:\n{out}\n\nSTDERR:\n{err}"
+            if len(combined) > 8000:
+                combined = combined[:8000] + "\n\n...[truncated output]"
+
+            return [{
+                "type": "text",
+                "data": f"[run_linter] Result:\n{combined}",
+            }]
+        except FileNotFoundError:
+            return [{
+                "type": "text",
+                "data": "[run_linter] pylint not found. Install it or adjust the tool to your linter of choice.",
+            }]
+        except Exception as e:
+            return [{
+                "type": "text",
+                "data": f"[run_linter] Error running linter: {e}",
+            }]
+

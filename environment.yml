@@ -12,4 +12,6 @@ dependencies:
   - uvicorn
   - pip:
     - mcp-server-git
+    - pytest
+    - pylint
 
