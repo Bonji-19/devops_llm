@@ -1,0 +1,142 @@
+[
+  {
+    "task_id": "task-001",
+    "success_compile": true,
+    "success_tests": true,
+    "success_behaviour": true,
+    "success_static": false,
+    "steps": 3,
+    "notes": "Changed 1 file(s).  1 file changed, 4 insertions(+), 4 deletions(-) | Behaviour: Behaviour verified: UNO type annotations fixed correctly | Static: Static checks failed (ruff). stderr: ",
+    "chat_path": "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/Project Repo/rusty_2/backend/eval/eval_chats/task-001.json"
+  },
+  {
+    "task_id": "task-002",
+    "success_compile": true,
+    "success_tests": true,
+    "success_behaviour": true,
+    "success_static": false,
+    "steps": 5,
+    "notes": "Changed 2 file(s).  2 files changed, 5 insertions(+), 6 deletions(-) | Behaviour: Behaviour verified: Hangman type annotation fixed correctly | Static: Static checks failed (ruff). stderr: ",
+    "chat_path": "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/Project Repo/rusty_2/backend/eval/eval_chats/task-002.json"
+  },
+  {
+    "task_id": "task-005",
+    "success_compile": true,
+    "success_tests": true,
+    "success_behaviour": false,
+    "success_static": false,
+    "steps": 6,
+    "notes": "Changed 3 file(s).  3 files changed, 10 insertions(+), 13 deletions(-) | Behaviour: Expected fix found 0 times, needed 1 | Static: Static checks failed (ruff). stderr: ",
+    "chat_path": "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/Project Repo/rusty_2/backend/eval/eval_chats/task-005.json"
+  },
+  {
+    "task_id": "task-006",
+    "success_compile": true,
+    "success_tests": true,
+    "success_behaviour": false,
+    "success_static": false,
+    "steps": 4,
+    "notes": "Changed 3 file(s).  3 files changed, 12 insertions(+), 15 deletions(-) | Behaviour: Expected fix found 0 times, needed 1 | Static: Static checks failed (ruff). stderr: ",
+    "chat_path": "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/Project Repo/rusty_2/backend/eval/eval_chats/task-006.json"
+  },
+  {
+    "task_id": "task-003",
+    "success_compile": true,
+    "success_tests": true,
+    "success_behaviour": true,
+    "success_static": false,
+    "steps": 10,
+    "notes": "Changed 3 file(s).  3 files changed, 12 insertions(+), 15 deletions(-) | Behaviour: Changes detected:  3 files changed, 12 insertions(+), 15 deletions(-) | Static: Static checks failed (ruff). stderr: ",
+    "chat_path": "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/Project Repo/rusty_2/backend/eval/eval_chats/task-003.json"
+  },
+  {
+    "task_id": "task-004",
+    "success_compile": true,
+    "success_tests": true,
+    "success_behaviour": true,
+    "success_static": false,
+    "steps": 5,
+    "notes": "Changed 3 file(s).  3 files changed, 11 insertions(+), 14 deletions(-) | Behaviour: Changes detected:  3 files changed, 11 insertions(+), 14 deletions(-) | Static: Static checks failed (ruff). stderr: ",
+    "chat_path": "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/Project Repo/rusty_2/backend/eval/eval_chats/task-004.json"
+  },
+  {
+    "task_id": "task-007",
+    "success_compile": true,
+    "success_tests": true,
+    "success_behaviour": true,
+    "success_static": false,
+    "steps": 8,
+    "notes": "Changed 3 file(s).  3 files changed, 11 insertions(+), 14 deletions(-) | Behaviour: Changes detected:  3 files changed, 11 insertions(+), 14 deletions(-) | Static: Static checks failed (ruff). stderr: ",
+    "chat_path": "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/Project Repo/rusty_2/backend/eval/eval_chats/task-007.json"
+  },
+  {
+    "task_id": "task-008",
+    "success_compile": false,
+    "success_tests": true,
+    "success_behaviour": true,
+    "success_static": false,
+    "steps": 4,
+    "notes": "Changed 3 file(s).  3 files changed, 9 insertions(+), 1034 deletions(-) | Behaviour: Changes detected:  3 files changed, 9 insertions(+), 1034 deletions(-) | Compile: Compile errors: game.py: Sorry: IndentationError: unexpected indent (game.py, line 1) | Static: Static checks failed (ruff). stderr: ",
+    "chat_path": "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/Project Repo/rusty_2/backend/eval/eval_chats/task-008.json"
+  },
+  {
+    "task_id": "task-009",
+    "success_compile": false,
+    "success_tests": true,
+    "success_behaviour": false,
+    "success_static": false,
+    "steps": 20,
+    "notes": "Changed 3 file(s).  3 files changed, 9 insertions(+), 1034 deletions(-) | Behaviour: Expected fix found 0 times, needed 1 | Compile: Compile errors: game.py: Sorry: IndentationError: unexpected indent (game.py, line 1) | Static: Static checks failed (ruff). stderr:  | Agent error: Reached maximum steps (20) without completion",
+    "chat_path": "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/Project Repo/rusty_2/backend/eval/eval_chats/task-009.json"
+  },
+  {
+    "task_id": "task-010",
+    "success_compile": false,
+    "success_tests": true,
+    "success_behaviour": true,
+    "success_static": false,
+    "steps": 20,
+    "notes": "Changed 3 file(s).  3 files changed, 9 insertions(+), 1034 deletions(-) | Behaviour: Behaviour verified: Dog dead code removal fixed correctly | Compile: Compile errors: game.py: Sorry: IndentationError: unexpected indent (game.py, line 1) | Static: Static checks failed (ruff). stderr:  | Agent error: Reached maximum steps (20) without completion",
+    "chat_path": "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/Project Repo/rusty_2/backend/eval/eval_chats/task-010.json"
+  },
+  {
+    "task_id": "task-011",
+    "success_compile": true,
+    "success_tests": true,
+    "success_behaviour": true,
+    "success_static": false,
+    "steps": 15,
+    "notes": "Changed 3 file(s).  3 files changed, 11 insertions(+), 1032 deletions(-) | Behaviour: Changes detected:  3 files changed, 11 insertions(+), 1032 deletions(-) | Static: Static checks failed (ruff). stderr: ",
+    "chat_path": "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/Project Repo/rusty_2/backend/eval/eval_chats/task-011.json"
+  },
+  {
+    "task_id": "task-012",
+    "success_compile": true,
+    "success_tests": true,
+    "success_behaviour": true,
+    "success_static": false,
+    "steps": 7,
+    "notes": "Changed 3 file(s).  3 files changed, 13 insertions(+), 1040 deletions(-) | Behaviour: Changes detected:  3 files changed, 13 insertions(+), 1040 deletions(-) | Static: Static checks failed (ruff). stderr: ",
+    "chat_path": "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/Project Repo/rusty_2/backend/eval/eval_chats/task-012.json"
+  },
+  {
+    "task_id": "task-013",
+    "success_compile": true,
+    "success_tests": true,
+    "success_behaviour": true,
+    "success_static": false,
+    "steps": 5,
+    "notes": "Changed 4 file(s).  3 files changed, 13 insertions(+), 1040 deletions(-) | Behaviour: Changes detected:  3 files changed, 13 insertions(+), 1040 deletions(-) | Static: Static checks failed (ruff). stderr:  | Test Quality: Lint: Linting failed: Command not found: flake8 | Collection: Test collection failed: ",
+    "chat_path": "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/Project Repo/rusty_2/backend/eval/eval_chats/task-013.json"
+  },
+  {
+    "task_id": "task-014",
+    "success_compile": true,
+    "success_tests": true,
+    "success_behaviour": true,
+    "success_static": false,
+    "steps": 20,
+    "notes": "Changed 4 file(s).  3 files changed, 13 insertions(+), 1040 deletions(-) | Behaviour: Changes detected:  3 files changed, 13 insertions(+), 1040 deletions(-) | Static: Static checks failed (ruff). stderr:  | Test Quality: Lint: Linting failed: Command not found: flake8 | Collection: Test collection failed:  | Agent error: Reached maximum steps (20) without completion",
+    "chat_path": "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/Project Repo/rusty_2/backend/eval/eval_chats/task-014.json"
+  }
+]

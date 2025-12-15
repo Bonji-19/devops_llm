@@ -75,88 +75,162 @@ def run_command(
 def check_compile(repo_root: Path) -> tuple[bool, str]:
     """
     Check if the code compiles/runs successfully.
-    
-    Uses pytest with --maxfail=1 as a simple compile/run check.
-    
+
+    Compiles all Python files to check for syntax errors.
+
     Args:
         repo_root: Path to repository root
-        
+
     Returns:
         tuple: (success: bool, notes: str)
     """
-    success, stdout, stderr = run_command(
-        ["python", "-m", "pytest", "--maxfail=1", "--collect-only"],
-        cwd=repo_root,
-        timeout=60,
-    )
-    
-    notes = ""
-    if not success:
-        notes = f"Compile check failed. stderr: {stderr[:500]}"
-    
-    return success, notes
+    import glob
+    import sys
+
+    # Find all .py files in src/ directories
+    py_files = []
+    for pattern in ["*/src/**/*.py", "*/src/*.py", "src/**/*.py", "src/*.py"]:
+        py_files.extend(glob.glob(str(repo_root / pattern), recursive=True))
+
+    if not py_files:
+        # No source files found, check top-level
+        py_files = glob.glob(str(repo_root / "**/*.py"), recursive=True)
+        # Exclude venv, .git, etc.
+        py_files = [f for f in py_files if "venv" not in f and ".git" not in f and "__pycache__" not in f]
+
+    if not py_files:
+        return True, "No Python files found to compile"
+
+    # Try to compile each file
+    errors = []
+    for py_file in py_files:
+        success, stdout, stderr = run_command(
+            [sys.executable, "-m", "py_compile", py_file],
+            cwd=repo_root,
+            timeout=10,
+        )
+        if not success:
+            errors.append(f"{Path(py_file).name}: {stderr[:200]}")
+
+    if errors:
+        notes = f"Compile errors: {'; '.join(errors[:3])}"  # Show first 3 errors
+        return False, notes
+
+    return True, ""
 
 
 def check_tests(repo_root: Path) -> tuple[bool, str]:
     """
     Check if the test suite passes.
-    
+
+    If no tests are found, returns success with a note.
+
     Args:
         repo_root: Path to repository root
-        
+
     Returns:
         tuple: (success: bool, notes: str)
     """
+    import sys
+
+    # First check if tests exist
+    collect_success, collect_stdout, collect_stderr = run_command(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q"],
+        cwd=repo_root,
+        timeout=60,
+    )
+
+    # Check if any tests were collected
+    if "no tests" in collect_stdout.lower() or "collected 0" in collect_stdout.lower():
+        return True, "No tests found - skipped"
+
+    # If collection failed, it might be a syntax error
+    if not collect_success:
+        return False, f"Test collection failed: {collect_stderr[:300]}"
+
+    # Run the actual tests
     success, stdout, stderr = run_command(
-        ["python", "-m", "pytest"],
+        [sys.executable, "-m", "pytest"],
         cwd=repo_root,
         timeout=300,
     )
-    
+
     notes = ""
     if not success:
         notes = f"Tests failed. stderr: {stderr[:500]}"
-    
+
     return success, notes
 
 
 def check_static(repo_root: Path) -> tuple[bool, str]:
     """
     Run static checks (linters, SCA).
-    
+
     Tries ruff first, then falls back to flake8 if ruff is not available.
-    
+
     Args:
         repo_root: Path to repository root
-        
+
     Returns:
         tuple: (success: bool, notes: str)
     """
-    # Try ruff first
-    success, stdout, stderr = run_command(
-        ["ruff", "check", "."],
-        cwd=repo_root,
-        timeout=120,
-    )
-    
-    if success:
-        return True, "Static checks passed (ruff)"
-    
-    # If ruff failed or not available, try flake8
-    success, stdout, stderr = run_command(
-        ["flake8", "."],
-        cwd=repo_root,
-        timeout=120,
-    )
-    
-    notes = ""
-    if not success:
-        notes = f"Static checks failed. stderr: {stderr[:500]}"
-        # If both failed, note which ones were tried
-        if "ruff" in stderr.lower() or "not found" in stderr.lower():
-            notes = "ruff not available, tried flake8. " + notes
-    
-    return success, notes
+    import sys
+    import shutil
+
+    # Try ruff first - look in same directory as Python executable
+    ruff_path = Path(sys.executable).parent / "ruff"
+    ruff_available = False
+
+    if ruff_path.exists():
+        ruff_available = True
+        success, stdout, stderr = run_command(
+            [str(ruff_path), "check", "."],
+            cwd=repo_root,
+            timeout=120,
+        )
+        if success:
+            return True, "Static checks passed (ruff)"
+        else:
+            # Ruff found issues
+            return False, f"Static checks failed (ruff). stderr: {stderr[:500]}"
+    elif shutil.which("ruff"):
+        ruff_available = True
+        success, stdout, stderr = run_command(
+            ["ruff", "check", "."],
+            cwd=repo_root,
+            timeout=120,
+        )
+        if success:
+            return True, "Static checks passed (ruff)"
+        else:
+            # Ruff found issues
+            return False, f"Static checks failed (ruff). stderr: {stderr[:500]}"
+
+    # If ruff not available, try flake8
+    flake8_path = Path(sys.executable).parent / "flake8"
+    if flake8_path.exists():
+        success, stdout, stderr = run_command(
+            [str(flake8_path), "."],
+            cwd=repo_root,
+            timeout=120,
+        )
+        if success:
+            return True, "Static checks passed (flake8)"
+        else:
+            return False, f"Static checks failed. stderr: {stderr[:500]}"
+    elif shutil.which("flake8"):
+        success, stdout, stderr = run_command(
+            ["flake8", "."],
+            cwd=repo_root,
+            timeout=120,
+        )
+        if success:
+            return True, "Static checks passed (flake8)"
+        else:
+            return False, f"Static checks failed. stderr: {stderr[:500]}"
+
+    # Neither linter available
+    return False, "No linter available (tried ruff and flake8)"
 
 
 def compute_diff_summary(repo_root: Path) -> str:
