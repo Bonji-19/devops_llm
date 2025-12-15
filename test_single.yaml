@@ -1,0 +1,5 @@
+# Single Task Test - UNO Type Annotation Bug (Easy)
+- id: task-001
+  description: "Fix type annotation bug in 3_uno/src/py/game.py at lines 28 and 45. The __str__ methods return strings but are annotated as -> None. Change the return type annotations to -> str."
+  repo_root: "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/DevOps_toanalyze"
+  git_mcp_url: "stdio://python:-m:mcp_server_git:--repository:/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/DevOps_toanalyze"

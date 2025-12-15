@@ -11,6 +11,8 @@ import yaml
 
 from ..dev_agent import DevAgentConfig, run_task
 from .metrics import EvalResult
+from .validate_tests import validate_test_quality
+from .behaviour_checks import check_behaviour
 
 
 def load_tasks(tasks_file: Path) -> list[dict]:
@@ -234,7 +236,7 @@ async def evaluate_task(
     config = DevAgentConfig(
         max_steps=max_steps,
         git_mcp_url=git_mcp_url,
-        backend_name="gemini",
+        backend_name="openai",
     )
     
     # Run the task
@@ -252,25 +254,63 @@ async def evaluate_task(
     compile_success, compile_notes = check_compile(repo_root)
     test_success, test_notes = check_tests(repo_root)
     static_success, static_notes = check_static(repo_root)
-    
-    # TODO: success_behaviour should ideally be manually evaluated
-    # based on human judgement of whether the task was actually solved.
-    # For now, we use test success as a proxy.
-    behaviour_success = test_success
-    
+
+    # Check behaviour using pattern matching (task-specific validation)
+    behaviour_success_check, behaviour_check_notes = check_behaviour(task_id, repo_root)
+
+    # If pattern check returned a result, use it. Otherwise fall back to test success
+    if behaviour_success_check is not None:
+        behaviour_success = behaviour_success_check
+        behaviour_notes = behaviour_check_notes
+    else:
+        # Fall back to test success as proxy when no pattern defined
+        behaviour_success = test_success
+        behaviour_notes = "Using test success as proxy (no pattern defined)"
+
+    # Additional validation for test-writing tasks (task-013, task-014)
+    test_quality_success = None
+    test_quality_notes = None
+    if task_id in ["task-013", "task-014"]:
+        # Find generated test file(s) by looking at git status
+        success_git, stdout_git, _ = run_command(
+            ["git", "status", "--porcelain"],
+            cwd=repo_root,
+            timeout=10,
+        )
+
+        if success_git and stdout_git:
+            # Look for added/modified test files
+            for line in stdout_git.strip().split("\n"):
+                if "test_" in line and ".py" in line:
+                    # Extract filename from git status output
+                    # Format: " M path/to/file.py" or "?? path/to/file.py"
+                    parts = line.strip().split()
+                    if len(parts) >= 2:
+                        test_file_path = repo_root / parts[-1]
+                        if test_file_path.exists():
+                            # Run test validation
+                            test_quality_success, test_quality_notes = validate_test_quality(
+                                test_file_path, repo_root
+                            )
+                            break
+
     # Compute diff summary
     diff_summary = compute_diff_summary(repo_root)
-    
+
     # Build notes
     notes_parts = []
     if diff_summary:
         notes_parts.append(diff_summary)
+    if behaviour_notes:
+        notes_parts.append(f"Behaviour: {behaviour_notes}")
     if not compile_success and compile_notes:
         notes_parts.append(f"Compile: {compile_notes}")
     if not test_success and test_notes:
         notes_parts.append(f"Tests: {test_notes}")
     if not static_success and static_notes:
         notes_parts.append(f"Static: {static_notes}")
+    if test_quality_notes:
+        notes_parts.append(f"Test Quality: {test_quality_notes}")
     if result.error:
         notes_parts.append(f"Agent error: {result.error}")
     
