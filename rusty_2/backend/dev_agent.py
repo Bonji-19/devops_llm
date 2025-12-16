@@ -251,13 +251,20 @@ def create_initial_conversation(task_description: str, repo_root: str) -> Conver
     - Read git status and history
     - Inspect diffs
     - Manage branches and commits
+    
+    IMPORTANT: Branch and working tree discipline
+    - Never commit directly to the main branch unless the user explicitly asks you to.
+    - For any non-trivial change, first create a new feature branch using the Git MCP tools.
+    - After creating a branch, explicitly switch/check out that branch (again using Git MCP tools) so that the repository's working tree is on the new branch.
+    - Before editing files, use Git MCP tools (e.g. status or similar) to confirm which branch is currently checked out.
+    - Only then use local file tools (read_file, apply_unified_diff, write_file) so that all edits happen on the active feature branch rather than on main.
 
-    You also have local tools to work directly with files:
+    You also have local tools to work directly with files on the currently checked-out branch:
     - list_files(path?): list files and directories in a directory (use '.' for repo root)
     - read_file(path): read a text file from the repo
-    - write_file(path, content, overwrite?): create or overwrite a text file
-    - apply_unified_diff(path, diff, strict?): apply a unified diff patch to a file
-    - run_tests(): run the test suite with pytest
+    - write_file(path, content, overwrite?): create a NEW file or completely overwrite an existing file with full content
+    - apply_unified_diff(path, diff, strict?): apply a unified diff patch to an EXISTING file (preferred for edits)
+    - run_tests(subdir?): run the test suite with pytest, optionally from a specific subdirectory (e.g. a subproject) instead of the repo root
     - run_linter(target?): run a linter (e.g. pylint) on the codebase
 
     Typical workflow for modifying a file:
