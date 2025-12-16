@@ -110,10 +110,16 @@ LOCAL_TOOL_SPECS: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "run_tests",
-            "description": "Run the test suite with pytest in the repository root.",
+            "description": "Run the test suite with pytest. By default this runs in the repository root, but you can provide a subdirectory (e.g. a subproject) to run tests from there instead.",
             "parameters": {
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "subdir": {
+                        "type": "string",
+                        "description": "Optional subdirectory (relative to the repo root) to use as the working directory when running pytest. Example: 'rusty_2' or 'core'. If omitted or empty, pytest runs in the repo root.",
+                        "default": "",
+                    },
+                },
             },
         },
     },
@@ -273,7 +279,7 @@ class LocalToolExecutor:
                 "data": f"[write_file] Error writing file {rel_path}: {e}",
             }]
     async def _run_tests(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Run pytest in the repository root.
+        """Run pytest in the repository root or an optional subdirectory.
 
         Uses subprocess.run wrapped in asyncio.to_thread so it also works
         in environments where asyncio.create_subprocess_exec is not implemented.
@@ -281,10 +287,23 @@ class LocalToolExecutor:
         python_exe = sys.executable
         cmd = [python_exe, "-m", "pytest"]
 
+        # Optional subdirectory to run tests from (relative to repo root)
+        subdir = str(args.get("subdir", "") or "").strip()
+        if subdir:
+            try:
+                cwd_path = self._resolve_path(subdir)
+            except ValueError as e:
+                return [{
+                    "type": "text",
+                    "data": f"[run_tests] Invalid subdir '{subdir}': {e}",
+                }]
+        else:
+            cwd_path = self.repo_root
+
         def _run() -> subprocess.CompletedProcess[str]:
             return subprocess.run(
                 cmd,
-                cwd=str(self.repo_root),
+                cwd=str(cwd_path),
                 capture_output=True,
                 text=True,
             )
