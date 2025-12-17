@@ -10,48 +10,105 @@ from typing import Optional, Tuple
 
 
 # Task-specific validation patterns
+# Updated to match new task numbering (001-014, Dog game only)
 TASK_PATTERNS = {
     "task-001": {
-        "description": "UNO type annotations",
-        "file": "3_uno/src/py/game.py",
-        "must_contain": ["def __str__(self) -> str:"],
-        "must_not_contain": ["def __str__(self) -> None:"],
-        "min_occurrences": 3,  # Card, Action, PlayerState all have __str__
+        "description": "Dog get_fore_color type annotation",
+        "file": "4_dog/src/py/game.py",
+        "must_contain": ["def get_fore_color(color: str) -> str:"],
+        "must_not_contain": ["def get_fore_color(color: str) -> Fore:"],
+        "min_occurrences": 1,
     },
     "task-002": {
-        "description": "Hangman type annotation",
-        "file": "1_hangman/src/py/game.py",
-        "must_contain": ["def __str__(self) -> str:"],
-        "must_not_contain": [],
+        "description": "Dog get_back_color type annotation",
+        "file": "4_dog/src/py/game.py",
+        "must_contain": ["def get_back_color(color: str) -> str:"],
+        "must_not_contain": ["def get_back_color(color: str) -> Fore:"],
         "min_occurrences": 1,
     },
     "task-005": {
-        "description": "Dog get_fore_color type annotation",
+        "description": "Dog mixed state references",
         "file": "4_dog/src/py/game.py",
-        "must_contain": ["def get_fore_color(color) -> str:"],
-        "must_not_contain": ["def get_fore_color(color) -> Fore:"],
+        "must_contain": ["if gaming_state.idx_player_active =="],
+        "must_not_contain": ["gaming_state.idx_player_active += 1\n        if self.game_state.idx_player_active =="],
         "min_occurrences": 1,
     },
     "task-006": {
-        "description": "Dog get_back_color type annotation",
-        "file": "4_dog/src/py/game.py",
-        "must_contain": ["def get_back_color(color) -> str:"],
-        "must_not_contain": ["def get_back_color(color) -> Fore:"],
-        "min_occurrences": 1,
-    },
-    "task-009": {
         "description": "Dog unused loop variable",
         "file": "4_dog/src/py/game.py",
         "must_contain": ["for _ in range(6):"],
         "must_not_contain": ["for card in range(6):"],
         "min_occurrences": 1,
     },
-    "task-010": {
+    "task-007": {
         "description": "Dog dead code removal",
         "file": "4_dog/src/py/game.py",
         "must_not_contain": ["#self.game_state.list_card_draw += self.game_state.list_card_discard"],
         "must_contain": [],
         "min_occurrences": 0,
+    },
+    "task-003": {
+        "description": "Dog card recycling bug",
+        "file": "4_dog/src/py/game.py",
+        "must_not_contain": ["gaming_state.list_card_draw = GameState.LIST_CARD.copy()"],
+        "must_contain": ["gaming_state.list_card_draw += gaming_state.list_card_discard"],
+        "min_occurrences": 1,
+    },
+    "task-004": {
+        "description": "Dog round logic bug",
+        "file": "4_dog/src/py/game.py",
+        "must_contain": ["bool_card_exchanged"],
+        "must_not_contain": [],
+        "min_occurrences": 2,
+    },
+    "task-008": {
+        "description": "Dog duplicate state reset",
+        "file": "4_dog/src/py/game.py",
+        "must_not_contain": ["gaming_state.bool_card_exchanged = False\n        gaming_state.idx_player_active"],
+        "must_contain": [],
+        "min_occurrences": 0,
+    },
+    "task-009": {
+        "description": "Dog test writing for get_fore_color",
+        "file": "4_dog/tests/test_game.py",
+        "must_contain": ["def test_", "get_fore_color"],
+        "must_not_contain": [],
+        "min_occurrences": 2,
+    },
+    "task-010": {
+        "description": "Dog player turn increment bug (open-ended)",
+        "file": "4_dog/src/py/game.py",
+        "must_contain": ["if gaming_state.idx_player_active =="],
+        "must_not_contain": ["gaming_state.idx_player_active += 1\n        if self.game_state.idx_player_active =="],
+        "min_occurrences": 1,
+    },
+    "task-011": {
+        "description": "Dog code quality issues (open-ended)",
+        "file": "4_dog/src/py/game.py",
+        "must_contain": ["for _ in range(6):"],
+        "must_not_contain": ["for card in range(6):", "#self.game_state.list_card_draw += self.game_state.list_card_discard"],
+        "min_occurrences": 1,
+    },
+    "task-012": {
+        "description": "Dog type annotation bugs (open-ended)",
+        "file": "4_dog/src/py/game.py",
+        "must_contain": ["def get_fore_color(color: str) -> str:", "def get_back_color(color: str) -> str:"],
+        "must_not_contain": ["def get_fore_color(color: str) -> Fore:", "def get_back_color(color: str) -> Fore:"],
+        "min_occurrences": 2,
+    },
+    "task-013": {
+        "description": "Dog round logic bug (open-ended)",
+        "file": "4_dog/src/py/game.py",
+        "must_contain": ["bool_card_exchanged"],
+        "must_not_contain": [],
+        "min_occurrences": 2,
+    },
+    "task-014": {
+        "description": "Dog card recycling bug (open-ended)",
+        "file": "4_dog/src/py/game.py",
+        "must_not_contain": ["gaming_state.list_card_draw = GameState.LIST_CARD.copy()"],
+        "must_contain": ["gaming_state.list_card_draw += gaming_state.list_card_discard"],
+        "min_occurrences": 1,
     },
 }
 

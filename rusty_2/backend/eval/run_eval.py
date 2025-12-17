@@ -167,6 +167,7 @@ def check_static(repo_root: Path) -> tuple[bool, str]:
     Run static checks (linters, SCA).
 
     Tries ruff first, then falls back to flake8 if ruff is not available.
+    Only checks src/ directory to avoid false positives from benchmark code.
 
     Args:
         repo_root: Path to repository root
@@ -177,6 +178,15 @@ def check_static(repo_root: Path) -> tuple[bool, str]:
     import sys
     import shutil
 
+    # Only check Dog game src/ directory to avoid false positives from other games
+    # For DevOps_toanalyze repo with multi-game structure (1_hangman, 2_battleship, 3_uno, 4_dog)
+    if (repo_root / "4_dog" / "src").exists():
+        check_path = "4_dog/src"
+    elif (repo_root / "src").exists():
+        check_path = "src"
+    else:
+        check_path = "."
+
     # Try ruff first - look in same directory as Python executable
     ruff_path = Path(sys.executable).parent / "ruff"
     ruff_available = False
@@ -184,50 +194,54 @@ def check_static(repo_root: Path) -> tuple[bool, str]:
     if ruff_path.exists():
         ruff_available = True
         success, stdout, stderr = run_command(
-            [str(ruff_path), "check", "."],
+            [str(ruff_path), "check", check_path],
             cwd=repo_root,
             timeout=120,
         )
         if success:
             return True, "Static checks passed (ruff)"
         else:
-            # Ruff found issues
-            return False, f"Static checks failed (ruff). stderr: {stderr[:500]}"
+            # Ruff found issues - include stdout which has the actual errors
+            error_msg = stderr if stderr else stdout
+            return False, f"Static checks failed (ruff). {error_msg[:500]}"
     elif shutil.which("ruff"):
         ruff_available = True
         success, stdout, stderr = run_command(
-            ["ruff", "check", "."],
+            ["ruff", "check", check_path],
             cwd=repo_root,
             timeout=120,
         )
         if success:
             return True, "Static checks passed (ruff)"
         else:
-            # Ruff found issues
-            return False, f"Static checks failed (ruff). stderr: {stderr[:500]}"
+            # Ruff found issues - include stdout which has the actual errors
+            error_msg = stderr if stderr else stdout
+            return False, f"Static checks failed (ruff). {error_msg[:500]}"
 
     # If ruff not available, try flake8
     flake8_path = Path(sys.executable).parent / "flake8"
     if flake8_path.exists():
         success, stdout, stderr = run_command(
-            [str(flake8_path), "."],
+            [str(flake8_path), check_path],
             cwd=repo_root,
             timeout=120,
         )
         if success:
             return True, "Static checks passed (flake8)"
         else:
-            return False, f"Static checks failed. stderr: {stderr[:500]}"
+            error_msg = stderr if stderr else stdout
+            return False, f"Static checks failed. {error_msg[:500]}"
     elif shutil.which("flake8"):
         success, stdout, stderr = run_command(
-            ["flake8", "."],
+            ["flake8", check_path],
             cwd=repo_root,
             timeout=120,
         )
         if success:
             return True, "Static checks passed (flake8)"
         else:
-            return False, f"Static checks failed. stderr: {stderr[:500]}"
+            error_msg = stderr if stderr else stdout
+            return False, f"Static checks failed. {error_msg[:500]}"
 
     # Neither linter available
     return False, "No linter available (tried ruff and flake8)"
@@ -282,7 +296,7 @@ def compute_diff_summary(repo_root: Path) -> str:
 async def evaluate_task(
     task: dict,
     output_dir: Path,
-    max_steps: int = 20,
+    max_steps: int = 30,
 ) -> EvalResult:
     """
     Evaluate a single task.
@@ -370,6 +384,24 @@ async def evaluate_task(
 
     # Compute diff summary
     diff_summary = compute_diff_summary(repo_root)
+
+    # Reset repository to clean state for next task
+    # This ensures each task starts fresh without leftover branches/changes
+    try:
+        # Delete all feature branches (keep only main)
+        branch_result = run_command(["git", "branch"], cwd=repo_root, timeout=10)
+        if branch_result[0] and branch_result[1]:
+            for line in branch_result[1].strip().split("\n"):
+                branch_name = line.strip().lstrip("* ")
+                if branch_name and branch_name != "main":
+                    run_command(["git", "branch", "-D", branch_name], cwd=repo_root, timeout=5)
+
+        # Checkout main and reset
+        run_command(["git", "checkout", "-f", "main"], cwd=repo_root, timeout=10)
+        run_command(["git", "reset", "--hard", "HEAD"], cwd=repo_root, timeout=10)
+        run_command(["git", "clean", "-fd"], cwd=repo_root, timeout=10)
+    except Exception as e:
+        print(f"Warning: Failed to reset repository: {e}")
 
     # Build notes
     notes_parts = []
@@ -494,7 +526,7 @@ async def run_evaluation(
 async def main():
     """Main entry point for running evaluation."""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Run DevAgent evaluation")
     parser.add_argument(
         "--tasks",
@@ -503,15 +535,10 @@ async def main():
         help="Path to tasks.yaml file",
     )
     parser.add_argument(
-        "--output-dir",
+        "--output",
         type=Path,
         default=Path(__file__).parent / "eval_chats",
-        help="Directory to save conversation JSON files",
-    )
-    parser.add_argument(
-        "--summary",
-        type=Path,
-        help="Path to save summary file (default: output_dir/eval_summary.json)",
+        help="Directory to save conversation JSON files (will be created if doesn't exist)",
     )
     parser.add_argument(
         "--max-steps",
@@ -519,13 +546,19 @@ async def main():
         default=20,
         help="Maximum number of agent steps per task",
     )
-    
+
     args = parser.parse_args()
-    
+
+    # Output directory is where we save individual task conversations
+    output_dir = args.output
+
+    # Summary goes in the same directory
+    summary_path = output_dir / "eval_summary.json"
+
     await run_evaluation(
         tasks_file=args.tasks,
-        output_dir=args.output_dir,
-        summary_path=args.summary,
+        output_dir=output_dir,
+        summary_path=summary_path,
         max_steps=args.max_steps,
     )
 

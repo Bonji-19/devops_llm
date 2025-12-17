@@ -33,7 +33,7 @@ class DevAgentRunRequest(BaseModel):
     task_description: str
     repo_root: str
     git_mcp_url: str
-    max_steps: int = 20
+    max_steps: int = 30
     conversation_history: Optional[list[MessageModel]] = None
 
 
