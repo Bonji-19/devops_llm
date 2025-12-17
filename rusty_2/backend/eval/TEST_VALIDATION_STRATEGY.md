@@ -1,45 +1,63 @@
 # Test Validation Strategy for Agent-Written Tests
 
 ## Overview
-When the DevAgent writes its own unit tests, we need to validate both the **code quality** and **test effectiveness**. This document outlines the validation criteria based on team feedback.
+When the DevAgent writes unit tests autonomously, validating both **code quality** and **test effectiveness** is critical. This document outlines the validation strategy implemented in the evaluation framework to ensure agent-generated tests meet professional standards.
 
 ## Validation Dimensions
 
-### 1. Code Quality (Linters & Static Checks)
+### 1. Code Quality (Static Analysis)
 **Question:** Does the test code pass linting and static checks?
 
-**How to validate:**
+**Implementation:**
 - Run `ruff check` or `flake8` on the test file
-- Check for common issues:
-  - Unused imports
-  - Undefined variables
-  - Code style violations (PEP 8)
-  - Type annotation errors
-  - Complexity issues
+- Integrated into the standard evaluation pipeline via `check_static()`
+
+**Checks performed:**
+- Unused imports
+- Undefined variables
+- Code style violations (PEP 8)
+- Type annotation errors
+- Complexity issues
 
 **Success criteria:**
 - ✅ No linting errors
 - ✅ No undefined names
 - ✅ Follows project code style
 
-### 2. Test Correctness (Functionality)
-**Question:** Does it test the right things with the right code?
+### 2. Test Collection & Syntax
+**Question:** Can pytest discover and parse the test file without errors?
 
-**How to validate:**
-
-#### 2a. Syntax & Execution
-- Does the test file import correctly?
-- Do the tests run without syntax errors?
-- Can pytest collect and execute the tests?
+**Implementation:**
+- Run `pytest --collect-only` on the test file
+- Validates syntax, imports, and test structure
+- Integrated into `check_tests()` function
 
 **Success criteria:**
-- ✅ `pytest --collect-only` succeeds
-- ✅ Tests execute without exceptions (pass or fail is okay, crashes are not)
+- ✅ Test file imports successfully
+- ✅ Pytest can collect test functions
+- ✅ No syntax errors or import failures
 
-#### 2b. Test Coverage
-- Does the test cover the intended functionality?
-- Are edge cases tested?
-- Are both positive and negative cases covered?
+### 3. Test Execution
+**Question:** Do the tests execute without crashing?
+
+**Implementation:**
+- Run `pytest` on the test file
+- Tests may pass or fail, but should not crash
+- Failures indicate test logic issues, crashes indicate structural problems
+
+**Success criteria:**
+- ✅ Tests execute without exceptions
+- ✅ No collection errors
+- ✅ Tests produce assertions (pass/fail counts)
+
+### 4. Test Coverage & Correctness
+**Question:** Does the test cover the intended functionality?
+
+**Validation approach:**
+- Pattern matching in `behaviour_checks.py` to verify:
+  - Presence of test functions (`def test_`)
+  - References to the target function being tested
+  - Appropriate assertion count
 
 **Manual inspection criteria:**
 - ✅ Tests the correct function/class
@@ -47,141 +65,147 @@ When the DevAgent writes its own unit tests, we need to validate both the **code
 - ✅ Tests meaningful scenarios (not just trivial cases)
 - ✅ Includes edge cases where appropriate
 
-#### 2c. Test Quality
-- Are test names descriptive?
-- Are fixtures used appropriately?
-- Is test data realistic?
-- Are assertions specific and meaningful?
-
-**Quality checklist:**
-- ✅ Descriptive test function names (e.g., `test_card_color_is_red`)
-- ✅ Proper use of pytest fixtures
-- ✅ Realistic test data (not just `foo`, `bar`, `test`)
-- ✅ Specific assertions (`assert x == 5`, not just `assert x`)
-
-#### 2d. Test Effectiveness
-- Do the tests actually detect bugs?
-- Would they fail if the implementation is broken?
+### 5. Test Effectiveness (Optional)
+**Question:** Would the tests detect bugs if the implementation breaks?
 
 **Mutation testing approach:**
 - Introduce a bug in the implementation
-- Run the test - it should fail
-- If test still passes, the test is ineffective
+- Run the test suite - it should fail
+- If tests still pass, they are ineffective
 
 **Success criteria:**
 - ✅ Test fails when implementation is intentionally broken
 - ✅ Test passes when implementation is correct
 
-## Validation Workflow
+## Implemented Validation Workflow
 
-### For Each Test-Writing Task:
+### Automated Validation (Integrated into `run_eval.py`)
 
-1. **Run the agent** to generate tests
-2. **Lint check:** Run static checks on generated test file
-3. **Syntax check:** Run `pytest --collect-only`
-4. **Execution check:** Run `pytest` on the test file
-5. **Manual review:** Check test quality and coverage
-6. **Mutation test (optional):** Introduce bugs and verify tests catch them
+For each test-writing task, the evaluation harness performs:
 
-## Proposed Test-Writing Tasks
+1. **Compilation Check** (`check_compile()`)
+   - Uses `py_compile` to validate Python syntax
+   - Ensures test file has no syntax errors
 
-### Easy Test-Writing Tasks:
-1. **Write unit test for Card.__str__()** (3_uno/src/py/game.py:28)
-   - Test with different colors and symbols
-   - Verify colorama formatting
+2. **Test Collection** (`check_tests()`)
+   - Runs `pytest --collect-only`
+   - Verifies pytest can discover and parse tests
 
-2. **Write unit test for get_fore_color()** (4_dog/src/py/game.py:10)
-   - Test all color mappings
-   - Test None handling
+3. **Test Execution** (`check_tests()`)
+   - Runs `pytest` on the test suite
+   - Validates tests execute without crashes
 
-### Medium Test-Writing Tasks:
-3. **Write integration test for Hangman game flow**
-   - Test full game from setup to completion
-   - Test win and lose scenarios
+4. **Static Analysis** (`check_static()`)
+   - Runs `ruff check` (fallback to `flake8`)
+   - Ensures code quality standards
 
-4. **Write unit tests for Battleship ship placement**
-   - Test valid placements
-   - Test invalid placements (out of bounds, overlapping)
+5. **Behavior Validation** (`check_behaviour()`)
+   - Pattern matching to verify test presence
+   - Confirms correct function is being tested
 
-## Automated Validation Script
+### Behavior Validation Example
 
-We should extend `run_eval.py` with a new check function:
+For task-009 (write tests for `get_fore_color()`):
 
 ```python
-def validate_test_quality(test_file_path: Path, implementation_file: Path) -> tuple[bool, str]:
-    """
-    Validate agent-written tests.
-
-    Checks:
-    1. Linting passes
-    2. Tests can be collected
-    3. Tests execute without crashes
-    4. (Optional) Manual quality score
-
-    Returns:
-        tuple: (success: bool, notes: str)
-    """
-    # Check 1: Lint the test file
-    lint_success, _ = run_command(["ruff", "check", str(test_file_path)])
-
-    # Check 2: Collect tests
-    collect_success, stdout, _ = run_command(
-        ["pytest", str(test_file_path), "--collect-only"]
-    )
-
-    # Check 3: Execute tests
-    exec_success, _, stderr = run_command(
-        ["pytest", str(test_file_path), "-v"]
-    )
-
-    # Build notes
-    notes_parts = []
-    if not lint_success:
-        notes_parts.append("Linting failed")
-    if not collect_success:
-        notes_parts.append("Test collection failed")
-    if not exec_success:
-        notes_parts.append("Test execution crashed")
-
-    # Manual quality metrics would be added here
-    # For now, automated checks only
-
-    success = lint_success and collect_success
-    return success, " | ".join(notes_parts) if notes_parts else "Tests validated"
-```
-
-## Example Evaluation Output
-
-For a test-writing task, the evaluation summary would include:
-
-```json
-{
-  "task_id": "task-013-write-card-test",
-  "success_lint": true,
-  "success_collect": true,
-  "success_execute": true,
-  "test_count": 5,
-  "coverage": "manual review pending",
-  "notes": "Generated 5 tests for Card.__str__(). All tests pass linting and execute successfully.",
-  "quality_score": "TBD (manual review)"
+"task-009": {
+    "description": "Dog test writing for get_fore_color",
+    "file": "4_dog/tests/test_game.py",
+    "must_contain": ["def test_", "get_fore_color"],
+    "must_not_contain": [],
+    "min_occurrences": 2,
 }
 ```
 
-## Team Feedback Integration
+This validates:
+- At least 2 occurrences of required patterns
+- Test function exists (`def test_`)
+- Target function is referenced (`get_fore_color`)
 
-This strategy directly addresses Silvan's feedback:
+## Validation Results Format
 
-> "wenn er selber tests schribt, lueg demfall ob de linter funktioniert & öbs richtige tested wird mitem richtige code"
+For a test-writing task, the evaluation output includes:
 
-Translation: "If it writes tests itself, check if the linter works & if it tests the right things with the right code"
+```json
+{
+  "task_id": "task-009",
+  "success_compile": true,
+  "success_tests": true,
+  "success_behaviour": true,
+  "success_static": true,
+  "steps": 9,
+  "notes": "Changed 1 file(s) | Behaviour: Dog test writing for get_fore_color fixed correctly",
+  "chat_path": "rusty_2/backend/eval/eval_chats/task-009.json"
+}
+```
 
-✅ **Linter check:** Automated via ruff/flake8
-✅ **Right things, right code:** Manual review + mutation testing
+All four success criteria must pass for the task to be considered successful.
 
-## Next Steps
+## Test-Writing Tasks in Evaluation Suite
 
-1. Add 2-3 test-writing tasks to tasks.yaml
-2. Extend run_eval.py with validate_test_quality()
-3. Run evaluation on test-writing tasks
-4. Manually review generated tests for quality
-5. Document findings for Friday demo
+### Current Implementation
+
+**Task 009: Write Unit Tests for get_fore_color()**
+- **Difficulty:** Easy (Test Writing)
+- **Target:** `4_dog/src/py/game.py:10`
+- **Requirements:**
+  - Test all color mappings (red, green, yellow, blue)
+  - Test None handling
+  - Test invalid colors
+  - Each test verifies correct Fore constant is returned
+
+**Validation Strategy:**
+1. ✅ Lint check: Test code passes ruff/flake8
+2. ✅ Collection: Pytest can discover tests
+3. ✅ Execution: Tests run without errors
+4. ✅ Behavior: Pattern matching confirms test presence and target function reference
+
+## Quality Metrics
+
+### Automated Metrics (Implemented)
+- **Linter pass rate:** Percentage of tasks where static checks pass
+- **Collection success:** Percentage of tasks where pytest can collect tests
+- **Execution success:** Percentage of tasks where tests execute
+- **Behavior match:** Percentage of tasks where pattern validation succeeds
+
+### Manual Quality Metrics (Future Enhancement)
+- Test name descriptiveness
+- Assertion specificity
+- Edge case coverage
+- Fixture usage appropriateness
+
+## Integration with Evaluation Pipeline
+
+The test validation strategy is fully integrated into `run_eval.py`:
+
+```python
+# For all tasks (including test-writing tasks)
+success_compile, _ = check_compile(repo_root)
+success_tests, _ = check_tests(repo_root)
+success_static, _ = check_static(repo_root)
+success_behaviour, _ = check_behaviour(task_id, repo_root)
+
+# Record results
+result = EvalResult(
+    task_id=task_id,
+    success_compile=success_compile,
+    success_tests=success_tests,
+    success_behaviour=success_behaviour,
+    success_static=success_static,
+    steps=step_count,
+)
+```
+
+Test-writing tasks use the same validation pipeline as bug-fixing tasks, ensuring consistency and comprehensive quality checks.
+
+## Success Criteria Summary
+
+A test-writing task is considered successful if:
+
+1. ✅ **Compilation:** Test file has valid Python syntax
+2. ✅ **Collection:** Pytest can discover and parse tests
+3. ✅ **Execution:** Tests run without crashes (pass/fail both acceptable)
+4. ✅ **Static Analysis:** Code passes linting (ruff/flake8)
+5. ✅ **Behavior:** Pattern validation confirms correct test structure
+
+All five criteria must pass for a test-writing task to succeed.

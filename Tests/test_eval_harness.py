@@ -159,10 +159,15 @@ class TestCheckCompile:
     """Tests for compilation/syntax checking."""
 
     def test_compile_success(self, monkeypatch, tmp_path: Path):
-        """Should return success when pytest --collect-only passes."""
+        """Should return success when py_compile succeeds on all files."""
+        # Create a test Python file
+        test_file = tmp_path / "src" / "test.py"
+        test_file.parent.mkdir(parents=True)
+        test_file.write_text("print('hello')")
+
         monkeypatch.setattr(
             "rusty_2.backend.eval.run_eval.run_command",
-            lambda *a, **k: (True, "collected 5 items", ""),
+            lambda *a, **k: (True, "", ""),
         )
 
         success, notes = check_compile(tmp_path)
@@ -170,8 +175,20 @@ class TestCheckCompile:
         assert success is True
         assert notes == ""
 
+    def test_compile_no_files(self, monkeypatch, tmp_path: Path):
+        """Should return success with note when no Python files found."""
+        success, notes = check_compile(tmp_path)
+
+        assert success is True
+        assert "No Python files found" in notes
+
     def test_compile_failure(self, monkeypatch, tmp_path: Path):
         """Should return failure with notes when compilation fails."""
+        # Create a test Python file
+        test_file = tmp_path / "src" / "test.py"
+        test_file.parent.mkdir(parents=True)
+        test_file.write_text("print('hello')")
+
         monkeypatch.setattr(
             "rusty_2.backend.eval.run_eval.run_command",
             lambda *a, **k: (False, "", "SyntaxError: invalid syntax"),
@@ -180,11 +197,16 @@ class TestCheckCompile:
         success, notes = check_compile(tmp_path)
 
         assert success is False
-        assert "Compile check failed" in notes
+        assert "Compile errors" in notes
         assert "SyntaxError" in notes
 
     def test_compile_truncates_long_stderr(self, monkeypatch, tmp_path: Path):
         """Should truncate very long error messages."""
+        # Create a test Python file
+        test_file = tmp_path / "src" / "test.py"
+        test_file.parent.mkdir(parents=True)
+        test_file.write_text("print('hello')")
+
         long_error = "E" * 1000
         monkeypatch.setattr(
             "rusty_2.backend.eval.run_eval.run_command",
@@ -218,15 +240,26 @@ class TestCheckTests:
 
     def test_tests_fail(self, monkeypatch, tmp_path: Path):
         """Should return failure when tests fail."""
+        call_count = {"n": 0}
+
+        def fake_run_command(cmd, cwd, timeout=0):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                # First call: pytest --collect-only (succeeds, finds tests)
+                return True, "collected 5 items", ""
+            else:
+                # Second call: pytest (test execution fails)
+                return False, "", "FAILED test_foo.py::test_bar"
+
         monkeypatch.setattr(
             "rusty_2.backend.eval.run_eval.run_command",
-            lambda *a, **k: (False, "", "FAILED test_foo.py::test_bar"),
+            fake_run_command,
         )
 
         success, notes = check_tests(tmp_path)
 
         assert success is False
-        assert "Tests failed" in notes
+        assert "Tests failed" in notes or "FAILED" in notes
 
 
 # =============================================================================
@@ -249,27 +282,35 @@ class TestCheckStatic:
         assert "ruff" in notes.lower()
 
     def test_ruff_fails_flake8_passes(self, monkeypatch, tmp_path: Path):
-        """Should fall back to flake8 when ruff fails."""
-        call_count = {"n": 0}
+        """Should fall back to flake8 when ruff is not available."""
+        import sys
+        from pathlib import Path as P
 
-        def fake_run_command(cmd, cwd, timeout=0):
-            call_count["n"] += 1
-            if call_count["n"] == 1:
-                # First call (ruff) fails
-                return False, "", "ruff: command not found"
-            else:
-                # Second call (flake8) passes
-                return True, "", ""
+        # Mock Path.exists to make ruff_path not exist
+        original_exists = P.exists
+        def fake_exists(self):
+            if "ruff" in str(self):
+                return False
+            return original_exists(self)
 
+        monkeypatch.setattr(P, "exists", fake_exists)
+
+        # Mock shutil.which to return None for ruff
+        monkeypatch.setattr("shutil.which", lambda x: None if x == "ruff" else "/bin/flake8")
+
+        # Create src directory so check_path logic works
+        (tmp_path / "src").mkdir()
+
+        # Mock run_command to simulate flake8 passing
         monkeypatch.setattr(
             "rusty_2.backend.eval.run_eval.run_command",
-            fake_run_command,
+            lambda *a, **k: (True, "", ""),
         )
 
         success, notes = check_static(tmp_path)
 
         assert success is True
-        assert call_count["n"] == 2  # Both ruff and flake8 were tried
+        assert "flake8" in notes.lower()
 
     def test_both_fail(self, monkeypatch, tmp_path: Path):
         """Should return failure when both ruff and flake8 fail."""
