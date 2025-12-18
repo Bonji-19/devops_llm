@@ -270,11 +270,27 @@ def create_initial_conversation(task_description: str, repo_root: str) -> Conver
     Typical workflow for modifying a file:
     1. Call read_file (and/or list_files) to inspect the current contents and locate relevant files.
     2. Decide on a small, focused change.
-    3. Either:
-       - Construct a unified diff patch (---/+++ headers and @@ hunks) and call apply_unified_diff, or
-       - Use write_file to create/overwrite a file with the full desired content.
-    4. After modifying code, call run_tests and  run_linter to verify your changes.
+    3. Choose the appropriate modification tool:
+       - For SMALL, SIMPLE changes (1-5 lines): Try apply_unified_diff first. If it fails due to formatting issues, use write_file with the complete corrected file.
+       - For creating NEW files: Use write_file
+       - For LARGE modifications (many lines/sections): Use apply_unified_diff
+       - Safety: write_file will reject writes that drastically reduce file size (likely errors from accidentally truncating)
+    4. After modifying code, call run_tests and run_linter to verify your changes.
     5. Only when tests pass and there are no critical linter failures should you explain what you changed and end with the exact phrase: "Task completed".
+
+    IMPORTANT: When using apply_unified_diff, the unified diff format must be EXACT:
+    - Header must start with "--- <filepath>" and "+++ <filepath>" on separate lines
+    - Each hunk must start with "@@ -<from_line>,<from_count> +<to_line>,<to_count> @@"
+    - The line counts MUST match the actual number of context/removed/added lines in the hunk
+    - Context lines start with " " (space), removed lines with "-", added lines with "+"
+    - Example for changing line 28:
+      ---
+      --- 3_uno/src/py/game.py
+      +++ 3_uno/src/py/game.py
+      @@ -28,1 +28,1 @@
+      -    def __str__(self) -> None:
+      +    def __str__(self) -> str:
+      ---
 
 
     For each task:

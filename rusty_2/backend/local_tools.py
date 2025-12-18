@@ -247,6 +247,18 @@ class LocalToolExecutor:
             msg = f"[apply_unified_diff] Patch applied successfully to {args['path']}"
             return [{"type": "text", "data": msg}]
         except Exception as e:
+            # Try non-strict mode if strict mode failed
+            if strict:
+                try:
+                    udiff = UnifiedDiff.from_string(diff_str)
+                    apply_unified_diff(udiff, from_file=path, to_file=path, strict=False)
+                    msg = f"[apply_unified_diff] Patch applied successfully to {args['path']} (non-strict mode)"
+                    return [{"type": "text", "data": msg}]
+                except Exception as e2:
+                    return [{
+                        "type": "text",
+                        "data": f"[apply_unified_diff] Failed to apply patch to {args['path']}: {e}. Non-strict attempt also failed: {e2}",
+                    }]
             return [{
                 "type": "text",
                 "data": f"[apply_unified_diff] Failed to apply patch to {args['path']}: {e}",
@@ -265,6 +277,28 @@ class LocalToolExecutor:
                     "type": "text",
                     "data": f"[write_file] File already exists and overwrite=False: {rel_path}",
                 }]
+
+            # Safety check: prevent accidentally destroying existing Python files
+            if path.exists() and path.suffix == ".py":
+                existing_size = len(path.read_text(encoding="utf-8"))
+                new_size = len(content)
+
+                # Allow writes if size is similar (90-110% range) - indicates targeted fix
+                size_ratio = new_size / existing_size if existing_size > 0 else 0
+                is_similar_size = 0.90 <= size_ratio <= 1.10
+
+                # Block if: large file AND (much smaller OR much larger)
+                if existing_size > 1000 and not is_similar_size:
+                    # If much smaller (< 50%), definitely block
+                    if new_size < existing_size * 0.5:
+                        return [{
+                            "type": "text",
+                            "data": f"[write_file] ERROR: Refusing to overwrite {rel_path}. New content ({new_size} chars) is much smaller than existing file ({existing_size} chars). Use apply_unified_diff for modifying existing files.",
+                        }]
+                    # If much larger (> 150%), warn but allow (might be adding code)
+                    elif new_size > existing_size * 1.5:
+                        # Allow but warn
+                        pass
 
             # Ensure parent directory exists
             path.parent.mkdir(parents=True, exist_ok=True)

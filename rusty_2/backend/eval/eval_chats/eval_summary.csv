@@ -1,0 +1,18 @@
+task_id,success_compile,success_tests,success_behaviour,success_static,steps,notes,chat_path
+task-001,True,True,True,True,8,"Changed 1 file(s).  1 file changed, 1 insertion(+), 3 deletions(-) | Behaviour: Behaviour verified: Dog get_fore_color type annotation fixed correctly",rusty_2/backend/eval/eval_chats/task-001.json
+task-002,True,True,False,True,6,No changes detected | Behaviour: Bug not fixed: 'def get_back_color(color: str) -> Fore:' still present,rusty_2/backend/eval/eval_chats/task-002.json
+task-003,True,True,False,True,6,No changes detected | Behaviour: Bug not fixed: 'gaming_state.list_card_draw = GameState.LIST_CARD.copy()' still present,rusty_2/backend/eval/eval_chats/task-003.json
+task-004,True,True,True,True,8,"Changed 1 file(s).  1 file changed, 3 insertions(+), 6 deletions(-) | Behaviour: Behaviour verified: Dog round logic bug fixed correctly",rusty_2/backend/eval/eval_chats/task-004.json
+task-005,True,True,False,True,10,"No changes detected | Behaviour: Bug not fixed: 'gaming_state.idx_player_active += 1
+        if self.game_state.idx_player_active ==' still present",rusty_2/backend/eval/eval_chats/task-005.json
+task-006,True,True,False,True,12,"No changes detected | Behaviour: Expected fix found 0 times, needed 1",rusty_2/backend/eval/eval_chats/task-006.json
+task-007,True,True,False,True,6,No changes detected | Behaviour: Bug not fixed: '#self.game_state.list_card_draw += self.game_state.list_card_discard' still present,rusty_2/backend/eval/eval_chats/task-007.json
+task-008,True,True,False,True,8,"No changes detected | Behaviour: Bug not fixed: 'gaming_state.bool_card_exchanged = False
+        gaming_state.idx_player_active' still present",rusty_2/backend/eval/eval_chats/task-008.json
+task-009,True,True,True,True,9,Changed 1 file(s) | Behaviour: Behaviour verified: Dog test writing for get_fore_color fixed correctly,rusty_2/backend/eval/eval_chats/task-009.json
+task-010,True,True,False,True,13,"Changed 1 file(s).  1 file changed, 30 insertions(+), 33 deletions(-) | Behaviour: Bug not fixed: 'gaming_state.idx_player_active += 1
+        if self.game_state.idx_player_active ==' still present",rusty_2/backend/eval/eval_chats/task-010.json
+task-011,True,True,False,True,8,"Changed 1 file(s).  1 file changed, 8 insertions(+), 7 deletions(-) | Behaviour: Bug not fixed: '#self.game_state.list_card_draw += self.game_state.list_card_discard' still present",rusty_2/backend/eval/eval_chats/task-011.json
+task-012,True,True,False,True,8,No changes detected | Behaviour: Bug not fixed: 'def get_fore_color(color: str) -> Fore:' still present,rusty_2/backend/eval/eval_chats/task-012.json
+task-013,True,True,True,True,10,No changes detected | Behaviour: Behaviour verified: Dog round logic bug (open-ended) fixed correctly,rusty_2/backend/eval/eval_chats/task-013.json
+task-014,True,True,False,True,19,"Changed 1 file(s).  1 file changed, 12 insertions(+), 21 deletions(-) | Behaviour: Expected fix found 0 times, needed 1",rusty_2/backend/eval/eval_chats/task-014.json

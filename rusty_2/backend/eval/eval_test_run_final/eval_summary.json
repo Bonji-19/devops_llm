@@ -1,0 +1,23 @@
+
+[
+  {
+    "task_id": "task-001",
+    "success_compile": true,
+    "success_tests": false,
+    "success_behaviour": false,
+    "success_static": true,
+    "steps": 9,
+    "notes": "Changed 2 file(s).  2 files changed, 2 insertions(+), 2 deletions(-) | Behaviour: Bug not fixed: 'def get_fore_color(color: str) -> Fore:' still present | Tests: Test collection failed: ",
+    "chat_path": "rusty_2/backend/eval/eval_test_run_final/task-001.json"
+  },
+  {
+    "task_id": "task-010",
+    "success_compile": true,
+    "success_tests": false,
+    "success_behaviour": false,
+    "success_static": true,
+    "steps": 13,
+    "notes": "Changed 2 file(s).  2 files changed, 2 insertions(+), 2 deletions(-) | Behaviour: Expected fix found 0 times, needed 1 | Tests: Test collection failed: ",
+    "chat_path": "rusty_2/backend/eval/eval_test_run_final/task-010.json"
+  }
+]

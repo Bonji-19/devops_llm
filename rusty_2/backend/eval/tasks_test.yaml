@@ -1,0 +1,32 @@
+# DevAgent Evaluation Tasks - Dog Game Focus
+# Target Repository: DevOps_toanalyze
+#
+# Evaluation Framework (4 Success Criteria from Tutor Feedback):
+# 1. Compile Check: Does the generated code compile/run successfully? (py_compile)
+# 2. Test Suite: Does it pass the existing test suite? (pytest)
+# 3. Behaviour: Does it solve the original task or bug description? (pattern matching + diff analysis)
+# 4. Static Checks: Does it pass linters and SCA tools? (ruff/flake8)
+#
+# Task Categories (Code Quality Dimensions):
+# - Type Safety: Type annotation bugs (Easy)
+# - Logic Correctness: Game logic bugs, control flow errors (Medium)
+# - Code Quality: Variable naming, dead code, redundant code (Easy)
+# - Test Writing: Creating test files (Medium)
+#
+# Focus: Only Dog game (4_dog) tasks, as other games had no work done (per team feedback)
+
+# ========================================
+# DIMENSION 1: TYPE SAFETY (Easy)
+# ========================================
+
+# Task 001 - Dog get_fore_color Type Annotation Bug (Easy - Type Safety)
+- id: task-001
+  description: "Fix type annotation bug in 4_dog/src/py/game.py at line 10. The get_fore_color function returns a string (Fore.RED, Fore.GREEN, etc.) but is annotated as -> Fore. Change the return type annotation to -> str."
+  repo_root: "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/DevOps_toanalyze"
+  git_mcp_url: "stdio:///opt/miniconda3/envs/rusty_2/bin/python:-m:mcp_server_git:--repository:/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/DevOps_toanalyze"
+
+# Task 010 - Player Turn Increment Bug Report (Hard - Open-Ended Logic)
+- id: task-010
+  description: "Bug report from QA: During gameplay in the Dog game, we noticed that after incrementing the active player index, the code sometimes checks against the wrong game state object. This causes inconsistent behavior when wrapping around to player 0. The issue appears to be in the code that handles player turn rotation. Please investigate and fix the state reference inconsistency."
+  repo_root: "/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/DevOps_toanalyze"
+  git_mcp_url: "stdio:///opt/miniconda3/envs/rusty_2/bin/python:-m:mcp_server_git:--repository:/Users/thiloholstein/Desktop/HSLU/Semester 3/DevOps & LLMs/DevOps_toanalyze"

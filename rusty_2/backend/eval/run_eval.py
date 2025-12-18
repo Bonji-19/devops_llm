@@ -11,6 +11,8 @@ import yaml
 
 from ..dev_agent import DevAgentConfig, run_task
 from .metrics import EvalResult
+from .validate_tests import validate_test_quality
+from .behaviour_checks import check_behaviour
 
 
 def load_tasks(tasks_file: Path) -> list[dict]:
@@ -73,88 +75,176 @@ def run_command(
 def check_compile(repo_root: Path) -> tuple[bool, str]:
     """
     Check if the code compiles/runs successfully.
-    
-    Uses pytest with --maxfail=1 as a simple compile/run check.
-    
+
+    Compiles all Python files to check for syntax errors.
+
     Args:
         repo_root: Path to repository root
-        
+
     Returns:
         tuple: (success: bool, notes: str)
     """
-    success, stdout, stderr = run_command(
-        ["python", "-m", "pytest", "--maxfail=1", "--collect-only"],
-        cwd=repo_root,
-        timeout=60,
-    )
-    
-    notes = ""
-    if not success:
-        notes = f"Compile check failed. stderr: {stderr[:500]}"
-    
-    return success, notes
+    import glob
+    import sys
+
+    # Find all .py files in src/ directories
+    py_files = []
+    for pattern in ["*/src/**/*.py", "*/src/*.py", "src/**/*.py", "src/*.py"]:
+        py_files.extend(glob.glob(str(repo_root / pattern), recursive=True))
+
+    if not py_files:
+        # No source files found, check top-level
+        py_files = glob.glob(str(repo_root / "**/*.py"), recursive=True)
+        # Exclude venv, .git, etc.
+        py_files = [f for f in py_files if "venv" not in f and ".git" not in f and "__pycache__" not in f]
+
+    if not py_files:
+        return True, "No Python files found to compile"
+
+    # Try to compile each file
+    errors = []
+    for py_file in py_files:
+        success, stdout, stderr = run_command(
+            [sys.executable, "-m", "py_compile", py_file],
+            cwd=repo_root,
+            timeout=10,
+        )
+        if not success:
+            errors.append(f"{Path(py_file).name}: {stderr[:200]}")
+
+    if errors:
+        notes = f"Compile errors: {'; '.join(errors[:3])}"  # Show first 3 errors
+        return False, notes
+
+    return True, ""
 
 
 def check_tests(repo_root: Path) -> tuple[bool, str]:
     """
     Check if the test suite passes.
-    
+
+    If no tests are found, returns success with a note.
+
     Args:
         repo_root: Path to repository root
-        
+
     Returns:
         tuple: (success: bool, notes: str)
     """
+    import sys
+
+    # First check if tests exist
+    collect_success, collect_stdout, collect_stderr = run_command(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q"],
+        cwd=repo_root,
+        timeout=60,
+    )
+
+    # Check if any tests were collected
+    if "no tests" in collect_stdout.lower() or "collected 0" in collect_stdout.lower():
+        return True, "No tests found - skipped"
+
+    # If collection failed, it might be a syntax error
+    if not collect_success:
+        return False, f"Test collection failed: {collect_stderr[:300]}"
+
+    # Run the actual tests
     success, stdout, stderr = run_command(
-        ["python", "-m", "pytest"],
+        [sys.executable, "-m", "pytest"],
         cwd=repo_root,
         timeout=300,
     )
-    
+
     notes = ""
     if not success:
         notes = f"Tests failed. stderr: {stderr[:500]}"
-    
+
     return success, notes
 
 
 def check_static(repo_root: Path) -> tuple[bool, str]:
     """
     Run static checks (linters, SCA).
-    
+
     Tries ruff first, then falls back to flake8 if ruff is not available.
-    
+    Only checks src/ directory to avoid false positives from benchmark code.
+
     Args:
         repo_root: Path to repository root
-        
+
     Returns:
         tuple: (success: bool, notes: str)
     """
-    # Try ruff first
-    success, stdout, stderr = run_command(
-        ["ruff", "check", "."],
-        cwd=repo_root,
-        timeout=120,
-    )
-    
-    if success:
-        return True, "Static checks passed (ruff)"
-    
-    # If ruff failed or not available, try flake8
-    success, stdout, stderr = run_command(
-        ["flake8", "."],
-        cwd=repo_root,
-        timeout=120,
-    )
-    
-    notes = ""
-    if not success:
-        notes = f"Static checks failed. stderr: {stderr[:500]}"
-        # If both failed, note which ones were tried
-        if "ruff" in stderr.lower() or "not found" in stderr.lower():
-            notes = "ruff not available, tried flake8. " + notes
-    
-    return success, notes
+    import sys
+    import shutil
+
+    # Only check Dog game src/ directory to avoid false positives from other games
+    # For DevOps_toanalyze repo with multi-game structure (1_hangman, 2_battleship, 3_uno, 4_dog)
+    if (repo_root / "4_dog" / "src").exists():
+        check_path = "4_dog/src"
+    elif (repo_root / "src").exists():
+        check_path = "src"
+    else:
+        check_path = "."
+
+    # Try ruff first - look in same directory as Python executable
+    ruff_path = Path(sys.executable).parent / "ruff"
+    ruff_available = False
+
+    if ruff_path.exists():
+        ruff_available = True
+        success, stdout, stderr = run_command(
+            [str(ruff_path), "check", check_path],
+            cwd=repo_root,
+            timeout=120,
+        )
+        if success:
+            return True, "Static checks passed (ruff)"
+        else:
+            # Ruff found issues - include stdout which has the actual errors
+            error_msg = stderr if stderr else stdout
+            return False, f"Static checks failed (ruff). {error_msg[:500]}"
+    elif shutil.which("ruff"):
+        ruff_available = True
+        success, stdout, stderr = run_command(
+            ["ruff", "check", check_path],
+            cwd=repo_root,
+            timeout=120,
+        )
+        if success:
+            return True, "Static checks passed (ruff)"
+        else:
+            # Ruff found issues - include stdout which has the actual errors
+            error_msg = stderr if stderr else stdout
+            return False, f"Static checks failed (ruff). {error_msg[:500]}"
+
+    # If ruff not available, try flake8
+    flake8_path = Path(sys.executable).parent / "flake8"
+    if flake8_path.exists():
+        success, stdout, stderr = run_command(
+            [str(flake8_path), check_path],
+            cwd=repo_root,
+            timeout=120,
+        )
+        if success:
+            return True, "Static checks passed (flake8)"
+        else:
+            error_msg = stderr if stderr else stdout
+            return False, f"Static checks failed. {error_msg[:500]}"
+    elif shutil.which("flake8"):
+        success, stdout, stderr = run_command(
+            ["flake8", check_path],
+            cwd=repo_root,
+            timeout=120,
+        )
+        if success:
+            return True, "Static checks passed (flake8)"
+        else:
+            error_msg = stderr if stderr else stdout
+            return False, f"Static checks failed. {error_msg[:500]}"
+
+    # Neither linter available
+    return False, "No linter available (tried ruff and flake8)"
 
 
 def compute_diff_summary(repo_root: Path) -> str:
@@ -206,7 +296,7 @@ def compute_diff_summary(repo_root: Path) -> str:
 async def evaluate_task(
     task: dict,
     output_dir: Path,
-    max_steps: int = 20,
+    max_steps: int = 30,
 ) -> EvalResult:
     """
     Evaluate a single task.
@@ -234,7 +324,7 @@ async def evaluate_task(
     config = DevAgentConfig(
         max_steps=max_steps,
         git_mcp_url=git_mcp_url,
-        backend_name="gemini",
+        backend_name="openai",
     )
     
     # Run the task
@@ -252,25 +342,81 @@ async def evaluate_task(
     compile_success, compile_notes = check_compile(repo_root)
     test_success, test_notes = check_tests(repo_root)
     static_success, static_notes = check_static(repo_root)
-    
-    # TODO: success_behaviour should ideally be manually evaluated
-    # based on human judgement of whether the task was actually solved.
-    # For now, we use test success as a proxy.
-    behaviour_success = test_success
-    
+
+    # Check behaviour using pattern matching (task-specific validation)
+    behaviour_success_check, behaviour_check_notes = check_behaviour(task_id, repo_root)
+
+    # If pattern check returned a result, use it. Otherwise fall back to test success
+    if behaviour_success_check is not None:
+        behaviour_success = behaviour_success_check
+        behaviour_notes = behaviour_check_notes
+    else:
+        # Fall back to test success as proxy when no pattern defined
+        behaviour_success = test_success
+        behaviour_notes = "Using test success as proxy (no pattern defined)"
+
+    # Additional validation for test-writing tasks (task-013, task-014)
+    test_quality_success = None
+    test_quality_notes = None
+    if task_id in ["task-013", "task-014"]:
+        # Find generated test file(s) by looking at git status
+        success_git, stdout_git, _ = run_command(
+            ["git", "status", "--porcelain"],
+            cwd=repo_root,
+            timeout=10,
+        )
+
+        if success_git and stdout_git:
+            # Look for added/modified test files
+            for line in stdout_git.strip().split("\n"):
+                if "test_" in line and ".py" in line:
+                    # Extract filename from git status output
+                    # Format: " M path/to/file.py" or "?? path/to/file.py"
+                    parts = line.strip().split()
+                    if len(parts) >= 2:
+                        test_file_path = repo_root / parts[-1]
+                        if test_file_path.exists():
+                            # Run test validation
+                            test_quality_success, test_quality_notes = validate_test_quality(
+                                test_file_path, repo_root
+                            )
+                            break
+
     # Compute diff summary
     diff_summary = compute_diff_summary(repo_root)
-    
+
+    # Reset repository to clean state for next task
+    # This ensures each task starts fresh without leftover branches/changes
+    try:
+        # Delete all feature branches (keep only main)
+        branch_result = run_command(["git", "branch"], cwd=repo_root, timeout=10)
+        if branch_result[0] and branch_result[1]:
+            for line in branch_result[1].strip().split("\n"):
+                branch_name = line.strip().lstrip("* ")
+                if branch_name and branch_name != "main":
+                    run_command(["git", "branch", "-D", branch_name], cwd=repo_root, timeout=5)
+
+        # Checkout main and reset
+        run_command(["git", "checkout", "-f", "main"], cwd=repo_root, timeout=10)
+        run_command(["git", "reset", "--hard", "HEAD"], cwd=repo_root, timeout=10)
+        run_command(["git", "clean", "-fd"], cwd=repo_root, timeout=10)
+    except Exception as e:
+        print(f"Warning: Failed to reset repository: {e}")
+
     # Build notes
     notes_parts = []
     if diff_summary:
         notes_parts.append(diff_summary)
+    if behaviour_notes:
+        notes_parts.append(f"Behaviour: {behaviour_notes}")
     if not compile_success and compile_notes:
         notes_parts.append(f"Compile: {compile_notes}")
     if not test_success and test_notes:
         notes_parts.append(f"Tests: {test_notes}")
     if not static_success and static_notes:
         notes_parts.append(f"Static: {static_notes}")
+    if test_quality_notes:
+        notes_parts.append(f"Test Quality: {test_quality_notes}")
     if result.error:
         notes_parts.append(f"Agent error: {result.error}")
     
@@ -380,7 +526,7 @@ async def run_evaluation(
 async def main():
     """Main entry point for running evaluation."""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Run DevAgent evaluation")
     parser.add_argument(
         "--tasks",
@@ -389,15 +535,10 @@ async def main():
         help="Path to tasks.yaml file",
     )
     parser.add_argument(
-        "--output-dir",
+        "--output",
         type=Path,
         default=Path(__file__).parent / "eval_chats",
-        help="Directory to save conversation JSON files",
-    )
-    parser.add_argument(
-        "--summary",
-        type=Path,
-        help="Path to save summary file (default: output_dir/eval_summary.json)",
+        help="Directory to save conversation JSON files (will be created if doesn't exist)",
     )
     parser.add_argument(
         "--max-steps",
@@ -405,13 +546,19 @@ async def main():
         default=20,
         help="Maximum number of agent steps per task",
     )
-    
+
     args = parser.parse_args()
-    
+
+    # Output directory is where we save individual task conversations
+    output_dir = args.output
+
+    # Summary goes in the same directory
+    summary_path = output_dir / "eval_summary.json"
+
     await run_evaluation(
         tasks_file=args.tasks,
-        output_dir=args.output_dir,
-        summary_path=args.summary,
+        output_dir=output_dir,
+        summary_path=summary_path,
         max_steps=args.max_steps,
     )
 
