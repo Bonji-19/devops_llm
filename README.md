@@ -1,12 +1,12 @@
 # devops_llm
 
-This repository contains an autonomous development assistant (DevAgent) that uses LLMs and MCP tools to perform development tasks.
+This repository contains an autonomous development assistant (DevAgent) that uses LLMs and MCP tools to perform development tasks. The frontend UI is branded as "Rusty 2.0", while the backend implementation uses "DevAgent" terminology throughout.
 
 ## Setup
 
 ### Prerequisites
 
-- **Miniconda** or **Anaconda** installed ([Download here](https://docs.conda.io/en/latest/miniconda.html))
+- **Miniconda** or **Anaconda** installed
 - **Git** installed
 - API keys for either:
   - OpenAI API key (for OpenAI backend)
@@ -28,17 +28,11 @@ conda env create -f environment.yml -n rusty_2
 conda activate rusty_2
 ```
 
-**Note:** If `mcp-server-git` is not found during environment creation, install it manually:
-
-```bash
-pip install mcp-server-git
-```
-
 ### Step 3: Configure Environment Variables
 
 Create a `.env` file in the repository root (`devops_llm/.env`) with your API keys:
 
-**For OpenAI backend:**
+**For OpenAI backend (default):**
 ```env
 OPENAI_API_KEY=your_openai_api_key_here
 LLM_BACKEND_NAME=openai
@@ -51,6 +45,11 @@ GOOGLE_API_KEY=your_google_api_key_here
 LLM_BACKEND_NAME=gemini
 LLM_MODEL_NAME=gemini-pro
 ```
+
+**Default Configuration:**
+- **Backend**: `openai` (if not specified)
+- **Model**: `gpt-4o-mini` (for OpenAI backend)
+- **Max steps**: `20` (can be configured up to 100 in the frontend)
 
 ### Step 4: Start the Backend API
 
@@ -108,20 +107,49 @@ The agent uses Git commands locally via the MCP server - it never needs network 
 
 **For modifications:**
 - "Read `config.json`, then use apply_unified_diff to change the version number from 1.0 to 2.0."
+- "Create a new feature branch, modify `src/main.py` to add error handling, run tests, and commit the changes."
 
 **Tip:** If the agent seems to only use Git tools and not explore files, try prompts that explicitly mention "use list_files" or "read the README file" to guide it.
 
 ## Project Structure
 
 - `rusty_2/backend/` - FastAPI backend and DevAgent core logic
+  - `eval/` - Evaluation harness for batch testing with behavior checks
 - `rusty_2/common/` - Shared utilities (LLM client, MCP client, conversation management)
 - `rusty_2/frontend/` - Streamlit UI
 - `scripts/` - Test and utility scripts
-- `rusty_2/backend/eval/` - Evaluation harness for batch testing
+  - `test_agent.py` - Direct programmatic usage example
+  - `call_api.py` - API client examples
+  - Other test scripts for various components
 
-## Troubleshooting
+## Available Tools
 
-- **"conda: command not found"**: Make sure Conda is installed and initialized. Use Anaconda Prompt or run `conda init powershell` and restart your terminal.
-- **"No module named mcp_server_git"**: Install with `pip install mcp-server-git` in the activated conda environment.
-- **API quota errors**: Check your API key billing/quota, or switch to a different backend (Gemini/OpenAI) in your `.env` file.
-- **Backend connection errors**: Ensure the FastAPI backend is running before using Streamlit. 
+The DevAgent has access to two types of tools:
+
+### Local Tools
+1. **`list_files(path?)`** - List files and directories (defaults to repo root)
+2. **`read_file(path)`** - Read a UTF-8 text file
+3. **`write_file(path, content, overwrite?)`** - Create or completely overwrite a file
+4. **`apply_unified_diff(path, diff, strict?)`** - Apply a unified diff patch to an existing file
+5. **`run_tests(subdir?)`** - Run pytest (optionally from a subdirectory)
+6. **`run_linter(target?)`** - Run pylint (defaults to `rusty_2` if no target specified)
+
+### MCP Tools (Git)
+The agent connects to `mcp-server-git` via stdio:// URLs, providing access to Git operations:
+- Repository inspection (status, log, diff)
+- Branch management
+- Commit operations
+- Working tree operations
+
+## Evaluation System
+
+The repository includes an evaluation harness in `rusty_2/backend/eval/` for batch testing:
+- Task definitions in YAML format (`tasks.yaml`)
+- Behavior validation using pattern matching
+- Compilation, test, and static analysis checks
+- Conversation logging and analysis
+
+Run evaluations using:
+```bash
+python -m rusty_2.backend.eval.run_eval
+```

@@ -13,6 +13,7 @@ from pathlib import Path as _Path
 
 import requests
 import streamlit as st
+import base64
 
 from rusty_2.common.conversation import Conversation
 from rusty_2.frontend.streamlit_display import StreamlitConversationDisplay
@@ -26,7 +27,18 @@ st.set_page_config(
 )
 
 # Title
-st.image("rusty_2/frontend/images/rusty_title.png")
+img_bytes = Path("rusty_2/frontend/images/rusty_title.png").read_bytes()
+encoded = base64.b64encode(img_bytes).decode()
+
+st.markdown(
+    f"""
+    <div style="text-align: center;">
+        <img src="data:image/png;base64,{encoded}">
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 st.header("Rusty 2.0 - Local Autonomous Development Assistant", text_alignment="center")
 
 # Sidebar for configuration
